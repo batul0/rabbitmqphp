@@ -10,7 +10,7 @@ require_once('rabbitMQLib.inc');
  */
 function getDB()
 {
-    $host = "127.0.0.1";   // or your DB VM IP
+    $host = "100.94.90.92";   // or your DB VM IP
     $user = "dbuser";
     $pass = "dbpass";
     $dbname = "myapp";
