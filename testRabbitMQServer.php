@@ -5,30 +5,79 @@ require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc');
 
 /**
- * Fake DB check — replace with a real DB lookup.
- * Return a structured array so the client and JS can read fields.
+ * Connect to MySQL.
+ * Adjust DB credentials/host according to your DB VM setup.
+ */
+function getDB()
+{
+    $host = "127.0.0.1";   // or your DB VM IP
+    $user = "dbuser";
+    $pass = "dbpass";
+    $dbname = "myapp";
+
+    $mysqli = new mysqli($host, $user, $pass, $dbname);
+    if ($mysqli->connect_errno) {
+        error_log("DB Connection failed: " . $mysqli->connect_error);
+        return null;
+    }
+    return $mysqli;
+}
+
+/**
+ * Check login against DB
  */
 function doLogin($username, $password)
 {
-    // TODO: Replace with actual DB verification.
-    // Example rule: username 'admin' and password '12345' are valid
-    $ok = (!empty($username) && !empty($password) && $username === 'admin' && $password === '12345');
-
-    if ($ok) {
+    $db = getDB();
+    if ($db === null) {
         return [
-            'success' => true,
-            'message' => 'Login successful',
-            'username' => $username,
-            // include anything else you want to return to the web client (e.g., role, token, etc.)
+            'success' => false,
+            'message' => 'Database connection failed'
         ];
     }
 
+    // Prepared statement to avoid SQL injection
+    $stmt = $db->prepare("SELECT password FROM users WHERE username = ?");
+    if (!$stmt) {
+        return [
+            'success' => false,
+            'message' => 'DB prepare failed'
+        ];
+    }
+    $stmt->bind_param("s", $username);
+    $stmt->execute();
+    $stmt->bind_result($hashedPassword);
+    if ($stmt->fetch()) {
+        $stmt->close();
+        $db->close();
+
+        // If you’re storing hashed passwords (recommended)
+        if (password_verify($password, $hashedPassword)) {
+            return [
+                'success' => true,
+                'message' => 'Login successful',
+                'username' => $username
+            ];
+        } else {
+            return [
+                'success' => false,
+                'message' => 'Invalid username or password'
+            ];
+        }
+    }
+
+    $stmt->close();
+    $db->close();
+
     return [
         'success' => false,
-        'message' => 'Invalid username or password',
+        'message' => 'User not found'
     ];
 }
 
+/**
+ * RabbitMQ request handler
+ */
 function requestProcessor($request)
 {
     echo "Received request" . PHP_EOL;
@@ -39,22 +88,19 @@ function requestProcessor($request)
     }
 
     switch ($request['type']) {
-        case 'login':
-            // NOTE: your frontend sends fields as 'uname' and 'pword'
-            $uname = isset($request['uname']) ? $request['uname'] : (isset($request['username']) ? $request['username'] : '');
-            $pword = isset($request['pword']) ? $request['pword'] : (isset($request['password']) ? $request['password'] : '');
+        case 'login': {
+            $uname = $request['uname'] ?? ($request['username'] ?? '');
+            $pword = $request['pword'] ?? ($request['password'] ?? '');
             return doLogin($uname, $pword);
-
-        // You can add other cases later, e.g., validate_session, register, etc.
+        }
         default:
             return ['success' => false, 'message' => 'ERROR: unsupported message type'];
     }
 }
 
-echo "Login RabbitMQ Server BEGIN" . PHP_EOL;
-// IMPORTANT: bind this server to the [loginServer] section
+echo "testRabbitMQServer BEGIN" . PHP_EOL;
 $server = new rabbitMQServer("testRabbitMQ.ini", "loginServer");
 $server->process_requests('requestProcessor');
-echo "Login RabbitMQ Server END" . PHP_EOL;
+echo "testRabbitMQServer END" . PHP_EOL;
 exit();
 ?>
