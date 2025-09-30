@@ -8,11 +8,22 @@
 </head>
 
 <script>
-function HandleLoginResponse(response)
-{
-	var text = JSON.parse(response);
-//	document.getElementById("textResponse").innerHTML = response+"<p>";	
-	document.getElementById("textResponse").innerHTML = "Response: "+text+"<p>";
+function HandleLoginResponse(response) {
+    let data;
+    try {
+        data = JSON.parse(response);
+    } catch (e) {
+        document.getElementById("textResponse").innerHTML = "Invalid server response";
+        return;
+    }
+
+    if (data.success) {
+        document.getElementById("textResponse").innerHTML = 
+            `<span class="text-success">${data.message}</span>`;
+    } else {
+        document.getElementById("textResponse").innerHTML = 
+            `<span class="text-danger">${data.message}</span>`;
+    }
 }
 
 function SendLoginRequest(username,password)
@@ -28,17 +39,40 @@ function SendLoginRequest(username,password)
 			HandleLoginResponse(this.responseText);
 		}		
 	}
-	request.send("type=register&uname="+username+"&pword="+password); //type is register instead of login
+	request.send("type=register&username="+username+"&password="+password); //type is register instead of login
 }
 </script>
 
-<h1>Our Website Name</h1>
+
 <body class="bg-light">
+  <nav class="navbar navbar-expand-md navbar-dark bg-dark">
+    <div class="container-fluid">
+      <!-- Brand -->
+      <a class="navbar-brand" href="index.html">Login</a>
+
+      <!-- Responsive Button for the smaller menu -->
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#collapsibleNavbar">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <!-- Navbar links -->
+      <div class="collapse navbar-collapse" id="collapsibleNavbar">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="home.html">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#">Logout</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
 
   <div class="container d-flex justify-content-center align-items-center vh-100">
     <div class="card p-4 shadow-sm" style="min-width: 350px;">
       <h3 class="text-center mb-4">Register an Account</h3>
-      <form id="registrationForm" onsubmit="event.preventDefault(); registerUser">
+      <form id="registrationForm" onsubmit="event.preventDefault(); registerUser();">
         <div class="mb-3">
           <label for="username" class="form-label">Username</label>
           <input type="text" class="form-control" id="username" placeholder="Enter username" required>
@@ -61,18 +95,18 @@ function SendLoginRequest(username,password)
   </div>
 
   <script>
-        function registerUser() {
-        const username = document.getElementById("username").value;
-        const password = document.getElementById("password").value;
-        const confirmPassword = document.getElementById("confirm-password").value;
+    function registerUser() {
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+      const confirmPassword = document.getElementById("confirm-password").value;
 
-        if (password !== confirmPassword) {
-            document.getElementById("textResponse").innerHTML = "Passwords do not match";
-            return;
-        } else {
-            SendLoginRequest(username, password);
-        }
-}
+      if (password !== confirmPassword) {
+          document.getElementById("textResponse").innerHTML = "Passwords do not match";
+          return;
+      } else {
+          SendLoginRequest(username, password);
+      }
+  }
 </script>
 
 </body>
