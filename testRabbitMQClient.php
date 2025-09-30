@@ -22,6 +22,38 @@ function login($username, $password){
     echo "\n\n";
 
 }
+
+function register($username, $password) {
+    $client = new rabbitMQClient("testRabbitMQ.ini","testServer");
+    
+    $request = array();
+    $request['type'] = "register";
+    $request['username'] = $username;
+    $request['password'] = $password;
+    $response = $client->send_request($request);
+    return $response;
+}
+
+function logout($token) {
+    $client = new rabbitMQClient("testRabbitMQ.ini","testServer");
+
+    $request = array();
+    $request['type'] = "logout";
+    $request['token'] = $token;
+    $response = $client->send_request($request);
+    return $response;
+}
+
+function validate($token) {
+    $client = new rabbitMQClient("testRabbitMQ.ini","testServer");
+    
+    $request = array();
+    $request['type'] = "validate";
+    $request['token'] = $token;
+    $response = $client->send_request($request);
+    return $response;
+}
+
 /*$client = new rabbitMQClient("testRabbitMQ.ini","testServer");
 
 
@@ -38,4 +70,3 @@ print_r($response);
 echo "\n\n";
 */
 echo $argv[0]." END".PHP_EOL;
-
