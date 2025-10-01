@@ -12,7 +12,7 @@ $response = register($username, $password);
 
 if ($response  == true) {
 
-	$_SESSION['username'] = $username; 
+	$_SESSION['token'] = $username; //will need to change to parse for token in return statement once completed
   echo json_encode(["success" => true, "message" => "Registration successful"]);
 
 } 

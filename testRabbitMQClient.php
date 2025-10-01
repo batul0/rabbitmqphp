@@ -6,7 +6,7 @@ require_once('rabbitMQLib.inc');
 
 function login($username, $password){
 
-    $client = new rabbitMQClient("testRabbitMQ.ini","testServer");
+    $client = new rabbitMQClient("testRabbitMQ.ini","testServer"); //change to loginServer
 
 
     $request = array();
@@ -24,7 +24,7 @@ function login($username, $password){
 }
 
 function register($username, $password) {
-    $client = new rabbitMQClient("testRabbitMQ.ini","testServer");
+    $client = new rabbitMQClient("testRabbitMQ.ini","testServer"); //change to registerServer
     
     $request = array();
     $request['type'] = "register";
