@@ -86,7 +86,6 @@ function doLogin(string $username, string $password): array {
    }
 }
 
-
 function doRegister(string $username, string $password): array {
     $username = trim($username);
     $password = (string)$password;
@@ -124,6 +123,7 @@ function doRegister(string $username, string $password): array {
     }
 }
 
+
 /**
 * (Optional) Example of session validation handler stub
 */
@@ -147,21 +147,24 @@ function requestProcessor(array $request) {
 
 
  switch ($request['type']) {
-   case 'login':
-     // Expect 'username' and 'password' keys from the webserver
-     $username = isset($request['username']) ? (string)$request['username'] : '';
-     $password = isset($request['password']) ? (string)$request['password'] : '';
-     return doLogin($username, $password);
+  case 'login':
+    $username = isset($request['username']) ? (string)$request['username'] : '';
+    $password = isset($request['password']) ? (string)$request['password'] : '';
+    return doLogin($username, $password);
 
+  case 'register':
+    $username = isset($request['username']) ? (string)$request['username'] : '';
+    $password = isset($request['password']) ? (string)$request['password'] : '';
+    return doRegister($username, $password);
 
-   case 'validate_session':
-     $sid = isset($request['sessionId']) ? (string)$request['sessionId'] : '';
-     return doValidate($sid);
+  case 'validate_session':
+    $sid = isset($request['sessionId']) ? (string)$request['sessionId'] : '';
+    return doValidate($sid);
 
+  default:
+    return ['success' => false, 'message' => 'ERROR: unknown type'];
+}
 
-   default:
-     return ['success' => false, 'message' => 'ERROR: unknown type'];
- }
 }
 
 
