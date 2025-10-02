@@ -1,18 +1,6 @@
 #!/usr/bin/php
 <?php
 declare(strict_types=1);
-
-
-/**
-* testRabbitMQServer.php
-* - Listens on RabbitMQ (loginServer section from testRabbitMQ.ini)
-* - Expects messages like:
-*   { "type": "login", "username": "kehoed", "password": "12345" }
-* - Checks MySQL for the user and verifies password hash
-* - Returns JSON payload: { success: true|false, message: "...", username?: "..." }
-*/
-
-
 require_once('path.inc');
 require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc');
@@ -98,6 +86,43 @@ function doLogin(string $username, string $password): array {
    }
 }
 
+
+function doRegister(string $username, string $password): array {
+    $username = trim($username);
+    $password = (string)$password;
+
+    if ($username === '' || strlen($password) < 4) {
+        return ['success' => false, 'message' => 'Invalid input'];
+    }
+
+    try {
+        $pdo = getPDO();
+
+        // Check if username exists
+        $chk = $pdo->prepare('SELECT 1 FROM users WHERE username = ? LIMIT 1');
+        $chk->execute([$username]);
+        if ($chk->fetchColumn()) {
+            return ['success' => false, 'message' => 'Username already exists'];
+        }
+
+        // Hash and insert
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        $ins  = $pdo->prepare('INSERT INTO users (username, password) VALUES (?, ?)');
+        $ins->execute([$username, $hash]);
+
+        return ['success' => true, 'message' => 'Registration successful'];
+    } catch (PDOException $e) {
+        // Handle unique constraint race condition gracefully
+        if ($e->getCode() === '23000') { // integrity constraint violation
+            return ['success' => false, 'message' => 'Username already exists'];
+        }
+        error_log('[doRegister] DB error: ' . $e->getMessage());
+        return ['success' => false, 'message' => 'Server error'];
+    } catch (Throwable $e) {
+        error_log('[doRegister] error: ' . $e->getMessage());
+        return ['success' => false, 'message' => 'Server error'];
+    }
+}
 
 /**
 * (Optional) Example of session validation handler stub
