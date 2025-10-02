@@ -70,13 +70,19 @@ function doLogin(string $username, string $password): array {
        }
 
 
-       // Minimal success payload
-       return [
-           'success'  => true,
-           'message'  => 'Login successful',
-           'username' => $row['username'],
-           // Add anything else you want to send back (e.g., user_id, roles)
-       ];
+       $key = bin2hex(random_bytes(32));
+       $exp = (new DateTime('+7 days'))->format('Y-m-d H:i:s');
+
+        $ins = $pdo->prepare('INSERT INTO sessions (user_id, session_key, expires_at) VALUES (?,?,?)');
+        $ins->execute([$row['id'], $key, $exp]);
+
+        return [
+        'success'      => true,
+        'message'      => 'Login successful',
+        'username'     => $row['username'],
+        'session_key'  => $key,        // <-- send back to webserver
+        'expires_at'   => $exp
+        ];
 
 
    } catch (Throwable $e) {
@@ -124,12 +130,54 @@ function doRegister(string $username, string $password): array {
 }
 
 
-/**
-* (Optional) Example of session validation handler stub
-*/
 function doValidate(string $sessionId): array {
-   // Implement as needed if you add sessions later
-   return ['success' => false, 'message' => 'Not implemented'];
+    $sessionId = trim($sessionId);
+    if ($sessionId === '') {
+        return ['success' => false, 'message' => 'No session'];
+    }
+
+    try {
+        $pdo = getPDO();
+        $q = $pdo->prepare(
+            'SELECT u.id, u.username
+             FROM sessions s
+             JOIN users u ON u.id = s.user_id
+             WHERE s.session_key = ? AND s.expires_at > NOW()
+             LIMIT 1'
+        );
+        $q->execute([$sessionId]);
+        $row = $q->fetch();
+
+        if (!$row) {
+            return ['success' => false, 'message' => 'Invalid/expired session'];
+        }
+
+        // (Optional) sliding expiration:
+        // $newExp = (new DateTime('+7 days'))->format('Y-m-d H:i:s');
+        // $upd = $pdo->prepare('UPDATE sessions SET expires_at=? WHERE session_key=?');
+        // $upd->execute([$newExp, $sessionId]);
+
+        return ['success' => true, 'username' => $row['username']];
+    } catch (Throwable $e) {
+        error_log('[doValidate] DB error: ' . $e->getMessage());
+        return ['success' => false, 'message' => 'Server error'];
+    }
+}
+
+function doLogout(string $sessionId): array {
+    $sessionId = trim($sessionId);
+    if ($sessionId === '') {
+        return ['success' => false, 'message' => 'No session'];
+    }
+    try {
+        $pdo = getPDO();
+        $del = $pdo->prepare('DELETE FROM sessions WHERE session_key = ?');
+        $del->execute([$sessionId]);
+        return ['success' => true, 'message' => 'Logged out'];
+    } catch (Throwable $e) {
+        error_log('[doLogout] DB error: ' . $e->getMessage());
+        return ['success' => false, 'message' => 'Server error'];
+    }
 }
 
 
@@ -160,6 +208,10 @@ function requestProcessor(array $request) {
   case 'validate_session':
     $sid = isset($request['sessionId']) ? (string)$request['sessionId'] : '';
     return doValidate($sid);
+
+  case 'logout':
+    $sid = isset($request['sessionId']) ? (string)$request['sessionId'] : '';
+    return doLogout($sid);
 
   default:
     return ['success' => false, 'message' => 'ERROR: unknown type'];
