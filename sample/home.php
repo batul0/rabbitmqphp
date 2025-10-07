@@ -45,9 +45,14 @@ try {
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body style="background-color: #967bb6;">
-  <div id="navbar-placeholder">
-    <?php @readfile(__DIR__ . '/navbar.html'); ?>
-  </div>
+  <div id="navbar-placeholder"></div>
+  <script>
+    fetch("navbar.html")
+      .then(response => response.text())
+      .then(data => {
+        document.getElementById("navbar-placeholder").innerHTML = data;
+      });
+  </script>
 
   <div style="background-color: #967bb6;" class="p-5 mb-4 text-white text-center">
     <div class="container-fluid py-5">
