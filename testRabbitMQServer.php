@@ -9,10 +9,10 @@ require_once('rabbitMQLib.inc');
 /* =======================
   CONFIG: MySQL settings
   ======================= */
-const DB_HOST = '100.94.90.92';     // change to your DB VM IP if this runs on a different VM
-const DB_NAME = 'it490';
-const DB_USER = 'rabbitmq';
-const DB_PASS = 'rabbitmq';
+const DB_HOST = '100.76.74.77';     // change to your DB VM IP if this runs on a different VM
+const DB_NAME = 'loginDB';
+const DB_USER = 'loginapp';
+const DB_PASS = 'loginappPass123';
 
 
 /**
