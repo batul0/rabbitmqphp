@@ -205,6 +205,48 @@ function upsertGame(PDO $pdo, array $g): void {
   ]);
 }
 
+function getGamesPage(PDO $pdo, int $page, int $pageSize, string $query): array {
+  $page = max(1, $page);
+  $pageSize = max(1, min(50, $pageSize));
+  $offset = ($page - 1) * $pageSize;
+
+  if ($query !== '') {
+    $like = '%' . $query . '%';
+    $cnt = $pdo->prepare('SELECT COUNT(*) FROM games WHERE name LIKE ?');
+    $cnt->execute([$like]);
+    $total = (int)$cnt->fetchColumn();
+
+    $stmt = $pdo->prepare('SELECT * FROM games WHERE name LIKE ? ORDER BY name LIMIT ? OFFSET ?');
+    $stmt->bindValue(1, $like, PDO::PARAM_STR);
+    $stmt->bindValue(2, $pageSize, PDO::PARAM_INT);
+    $stmt->bindValue(3, $offset, PDO::PARAM_INT);
+    $stmt->execute();
+  } else {
+    $total = (int)$pdo->query('SELECT COUNT(*) FROM games')->fetchColumn();
+    $stmt = $pdo->prepare('SELECT * FROM games ORDER BY name LIMIT ? OFFSET ?');
+    $stmt->bindValue(1, $pageSize, PDO::PARAM_INT);
+    $stmt->bindValue(2, $offset, PDO::PARAM_INT);
+    $stmt->execute();
+  }
+
+  $rows = $stmt->fetchAll();
+  $items = [];
+  foreach ($rows as $r) {
+    $items[] = [
+      'rawg_id'          => (int)$r['rawg_id'],
+      'name'             => $r['name'],
+      'released'         => $r['released'],
+      'rating'           => is_null($r['rating']) ? null : (float)$r['rating'],
+      'background_image' => $r['background_image'],
+      'platforms'        => json_decode($r['platforms'] ?? '[]', true) ?: [],
+      'genres'           => json_decode($r['genres'] ?? '[]', true) ?: [],
+    ];
+  }
+
+  $totalPages = max(1, (int)ceil($total / $pageSize));
+  return [$items, $total, $totalPages];
+}
+
 
 /**
 * The request dispatcher that RabbitMQ calls per message
