@@ -257,12 +257,14 @@ function doGamesList(int $page, int $pageSize, string $query): array {
     // 2) If DB has nothing for this filter/page, ask DMZ to fetch
     if (count($items) === 0) {
       $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
+      error_log('[doGamesList] sending to DMZ...');
       $dmzRes = $dmz->send_request([
         'type'     => 'fetch_games',
         'page'     => $page,
         'pageSize' => $pageSize,
         'query'    => $query
       ]);
+      error_log('[doGamesList] DMZ response: '.json_encode($dmzRes));
 
       if (!is_array($dmzRes) || empty($dmzRes['success'])) {
         return ['success'=>false,'message'=>'DMZ fetch failed'];
