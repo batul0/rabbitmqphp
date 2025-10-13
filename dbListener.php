@@ -338,8 +338,8 @@ function requestProcessor(array $request) {
     $sid = isset($request['sessionId']) ? (string)$request['sessionId'] : '';
     return doLogout($sid);
 
-  //case 'games_list':
-    //return doGamesList($request['page']??1, $request['pageSize']??9, $request['query']??'');
+  case 'games_list':
+    return doGamesList($request['page']??1, $request['pageSize']??9, $request['query']??'');
 
 
   default:
