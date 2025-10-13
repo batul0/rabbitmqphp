@@ -109,6 +109,7 @@ function doFetchGames(int $page, int $pageSize, string $query): array {
 }
 
 function requestProcessor($req) {
+  error_log('DMZ received: '.json_encode($req));
   if (!isset($req['type'])) return ['success'=>false,'message'=>'unsupported message type'];
   switch ($req['type']) {
     case 'fetch_games':
