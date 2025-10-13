@@ -13,7 +13,7 @@ require_once('rabbitMQLib.inc');
  */
 function rawgApiKey(): string {
   $k = getenv('RAWG_API_KEY');
-  if (!$k || $k === 'ecf3fb645b824ef5b55180f9aab887b5') {
+  if (!$k || $k === '') {
     // fallback for testing ONLY:
     // $k = 'YOUR_KEY_HERE';
   }
