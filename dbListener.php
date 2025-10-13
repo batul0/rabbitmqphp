@@ -247,6 +247,64 @@ function getGamesPage(PDO $pdo, int $page, int $pageSize, string $query): array 
   return [$items, $total, $totalPages];
 }
 
+function doGamesList(int $page, int $pageSize, string $query): array {
+  try {
+    $pdo = getPDO();
+
+    // 1) Try DB first
+    list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
+
+    // 2) If DB has nothing for this filter/page, ask DMZ to fetch
+    if (count($items) === 0) {
+      $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
+      $dmzRes = $dmz->send_request([
+        'type'     => 'fetch_games',
+        'page'     => $page,
+        'pageSize' => $pageSize,
+        'query'    => $query
+      ]);
+
+      if (!is_array($dmzRes) || empty($dmzRes['success'])) {
+        return ['success'=>false,'message'=>'DMZ fetch failed'];
+      }
+
+      // 3) Store/Upsert results into DB
+      $inserted = 0;
+      foreach (($dmzRes['items'] ?? []) as $g) {
+        if (empty($g['rawg_id'])) continue;
+        upsertGame($pdo, $g);
+        $inserted++;
+      }
+
+      // 4) Re-query DB for a consistent page/total
+      list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
+
+      return [
+        'success'    => true,
+        'items'      => $items,
+        'page'       => $page,
+        'pageSize'   => $pageSize,
+        'total'      => $total,
+        'totalPages' => $totalPages,
+        'source'     => ($inserted > 0 ? 'dmz->db' : 'db')
+      ];
+    }
+
+    // DB had data
+    return [
+      'success'    => true,
+      'items'      => $items,
+      'page'       => $page,
+      'pageSize'   => $pageSize,
+      'total'      => $total,
+      'totalPages' => $totalPages,
+      'source'     => 'db'
+    ];
+  } catch (Throwable $e) {
+    error_log('[doGamesList] error: '.$e->getMessage());
+    return ['success'=>false,'message'=>'Server error'];
+  }
+}
 
 /**
 * The request dispatcher that RabbitMQ calls per message
