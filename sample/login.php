@@ -3,7 +3,8 @@
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE & ~E_WARNING);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
-ini_set('error_log', '/tmp/login_php_errors.log');
+ini_set('error_log', '/var/log/php/login_php_errors.log');
+error_log("logger alive: " . date('c'));
 
 require_once('/home/vboxuser/git/rabbitmqphp/path.inc');
 require_once('/home/vboxuser/git/rabbitmqphp/get_host_info.inc');
