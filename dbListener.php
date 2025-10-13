@@ -339,7 +339,10 @@ function requestProcessor(array $request) {
     return doLogout($sid);
 
   case 'games_list':
-    return doGamesList($request['page']??1, $request['pageSize']??9, $request['query']??'');
+    $page  = (int)($request['page'] ?? 1);
+    $ps    = (int)($request['pageSize'] ?? 9);
+    $query = trim((string)($request['query'] ?? ''));
+    return doGamesList($page, $ps, $query);
 
 
   default:
