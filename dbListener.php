@@ -180,6 +180,31 @@ function doLogout(string $sessionId): array {
     }
 }
 
+function upsertGame(PDO $pdo, array $g): void {
+  $stmt = $pdo->prepare(
+    'INSERT INTO games (rawg_id, name, released, rating, background_image, platforms, genres)
+     VALUES (:rid, :name, :rel, :rating, :img, :plats, :genres)
+     ON DUPLICATE KEY UPDATE
+       name=VALUES(name),
+       released=VALUES(released),
+       rating=VALUES(rating),
+       background_image=VALUES(background_image),
+       platforms=VALUES(platforms),
+       genres=VALUES(genres)'
+  );
+  $plats  = json_encode($g['platforms'] ?? []);
+  $genres = json_encode($g['genres'] ?? []);
+  $stmt->execute([
+    ':rid'   => $g['rawg_id'],
+    ':name'  => $g['name'] ?? '',
+    ':rel'   => $g['released'] ?? null,
+    ':rating'=> isset($g['rating']) ? $g['rating'] : null,
+    ':img'   => $g['background_image'] ?? null,
+    ':plats' => $plats,
+    ':genres'=> $genres,
+  ]);
+}
+
 
 /**
 * The request dispatcher that RabbitMQ calls per message
