@@ -32,7 +32,7 @@ function httpGetJson(string $url, int $timeout = 10): array {
   $err  = curl_error($ch);
   $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
   curl_close($ch);
-
+  error_log("[DMZ] GET $url -> HTTP $code, curl_err='$err', len=" . ($body === false ? 0 : strlen($body)));
   if ($body === false || $code < 200 || $code >= 300) {
     throw new RuntimeException("HTTP $code $err");
   }
