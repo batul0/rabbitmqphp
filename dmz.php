@@ -6,19 +6,30 @@ require_once('path.inc');
 require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc');
 
-/**
- * RAWG API config
- * - Put your key in an env var: export RAWG_API_KEY=xxxxx
- * - Or hardcode below (not recommended)
- */
-function rawgApiKey(): string {
-  $k = getenv('RAWG_API_KEY');
-  if (!$k || $k === '') {
-    // fallback for testing ONLY:
-    // $k = 'YOUR_KEY_HERE';
+function loadDotEnv(string $file): void {
+  if (!is_file($file) || !is_readable($file)) return;
+  foreach (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+    $line = trim($line);
+    if ($line === '' || $line[0] === '#') continue;
+    $pos = strpos($line, '=');
+    if ($pos === false) continue;
+    $key = trim(substr($line, 0, $pos));
+    $val = trim(substr($line, $pos + 1));
+    if ((str_starts_with($val, '"') && str_ends_with($val, '"')) ||
+        (str_starts_with($val, "'") && str_ends_with($val, "'"))) {
+      $val = substr($val, 1, -1);
+    }
+    putenv("$key=$val");
+    $_ENV[$key] = $val;
   }
-  return (string)$k;
 }
+
+loadDotEnv(__DIR__ . '/.env');  // <-- add this line
+
+function rawgApiKey(): string {
+  return (string)(getenv('RAWG_API_KEY') ?: '');
+}
+
 
 function httpGetJson(string $url, int $timeout = 10): array {
   $ch = curl_init($url);
