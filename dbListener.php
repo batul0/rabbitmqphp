@@ -290,78 +290,97 @@ function getGamesPage(PDO $pdo, int $page, int $pageSize, string $query): array 
 function doGamesList(int $page, int $pageSize, string $query, string $scope = 'recent'): array {
   try {
     $pdo = getPDO();
-
     $page = max(1, $page);
     $pageSize = max(1, min(50, $pageSize));
 
     $today = new DateTimeImmutable('today');
     $from  = $today->sub(new DateInterval('P30D'))->format('Y-m-d'); // 30 days ago
     $to    = $today->add(new DateInterval('P90D'))->format('Y-m-d'); // 90 days ahead
+    $useRecent = ($scope === 'recent' && $query === '');
 
-    $useRecentWindow = ($scope === 'recent' && $query === '');
-
-    // 1) Try DB first
-    if ($useRecentWindow) {
-      list($items, $total, $totalPages) = getGamesPageByDates($pdo, $page, $pageSize, $from, $to);
-    } else {
-      list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
-    }
-
-    // 2) If DB has nothing, ask DMZ with the right filters
-    if (count($items) === 0) {
+    if ($scope === 'search' && $query !== '') {
+      // 1) Always ask DMZ first for fresh relevant results (search)
       $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
-      $dmzReq = [
-        'type'     => 'fetch_games',
-        'page'     => $page,
-        'pageSize' => $pageSize,
-        'query'    => $query
-      ];
-      if ($useRecentWindow) {
-        $dmzReq['dates']    = $from . ',' . $to; // RAWG supports dates=YYYY-MM-DD,YYYY-MM-DD
-        $dmzReq['ordering'] = '-released';       // newest releases first
-      }
+      $dmzRes = $dmz->send_request([
+        'type'           => 'fetch_games',
+        'page'           => $page,
+        'pageSize'       => $pageSize,
+        'query'          => $query,
+        'search_precise' => false,      // let RAWG return related titles
+        'ordering'       => '-rating'   // prefer popular/highly rated first
+      ]);
 
-      $dmzRes = $dmz->send_request($dmzReq);
       if (!is_array($dmzRes) || empty($dmzRes['success'])) {
-        return ['success'=>false,'message'=>'DMZ fetch failed'];
-      }
-
-      $inserted = 0;
-      foreach (($dmzRes['items'] ?? []) as $g) {
-        if (empty($g['rawg_id'])) continue;
-        upsertGame($pdo, $g);
-        $inserted++;
-      }
-
-      // Re-query DB for consistent paging/total
-      if ($useRecentWindow) {
-        list($items, $total, $totalPages) = getGamesPageByDates($pdo, $page, $pageSize, $from, $to);
-      } else {
+        // fallback to whatever we may have cached
         list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
+        return [
+          'success'=> true,
+          'items'=> $items,
+          'page'=> $page, 'pageSize'=> $pageSize,
+          'total'=> $total, 'totalPages'=> $totalPages,
+          'source'=> 'db-fallback'
+        ];
       }
 
+      // 2) Upsert DMZ items into DB
+      foreach (($dmzRes['items'] ?? []) as $g) {
+        if (!empty($g['rawg_id'])) upsertGame($pdo, $g);
+      }
+
+      // 3) Return page from DB for stable pagination
+      list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
       return [
-        'success'    => true,
-        'items'      => $items,
-        'page'       => $page,
-        'pageSize'   => $pageSize,
-        'total'      => $total,
-        'totalPages' => $totalPages,
-        'source'     => ($inserted > 0 ? 'dmz->db' : 'db'),
-        'window'     => $useRecentWindow ? ['from'=>$from,'to'=>$to] : null
+        'success'=> true,
+        'items'=> $items,
+        'page'=> $page, 'pageSize'=> $pageSize,
+        'total'=> $total, 'totalPages'=> $totalPages,
+        'source'=> 'dmz->db'
       ];
     }
 
-    // DB had data
+    // RECENT (upcoming + newly released)
+    if ($useRecent) {
+      // try DB first
+      list($items, $total, $totalPages) = getGamesPageByDates($pdo, $page, $pageSize, $from, $to);
+      if (count($items) === 0) {
+        $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
+        $dmzRes = $dmz->send_request([
+          'type'     => 'fetch_games',
+          'page'     => $page,
+          'pageSize' => $pageSize,
+          'query'    => '',
+          'dates'    => $from . ',' . $to,
+          'ordering' => '-released'
+        ]);
+        if (is_array($dmzRes) && !empty($dmzRes['success'])) {
+          foreach (($dmzRes['items'] ?? []) as $g) {
+            if (!empty($g['rawg_id'])) upsertGame($pdo, $g);
+          }
+          list($items, $total, $totalPages) = getGamesPageByDates($pdo, $page, $pageSize, $from, $to);
+          return [
+            'success'=> true, 'items'=> $items,
+            'page'=> $page, 'pageSize'=> $pageSize,
+            'total'=> $total, 'totalPages'=> $totalPages,
+            'source'=> 'dmz->db', 'window'=> ['from'=>$from,'to'=>$to]
+          ];
+        }
+      }
+      // DB had data (or DMZ failed but DB has something)
+      return [
+        'success'=> true, 'items'=> $items,
+        'page'=> $page, 'pageSize'=> $pageSize,
+        'total'=> $total, 'totalPages'=> $totalPages,
+        'source'=> 'db', 'window'=> ['from'=>$from,'to'=>$to]
+      ];
+    }
+
+    // default fallback: plain DB listing (shouldn’t hit normally)
+    list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
     return [
-      'success'    => true,
-      'items'      => $items,
-      'page'       => $page,
-      'pageSize'   => $pageSize,
-      'total'      => $total,
-      'totalPages' => $totalPages,
-      'source'     => 'db',
-      'window'     => $useRecentWindow ? ['from'=>$from,'to'=>$to] : null
+      'success'=> true, 'items'=> $items,
+      'page'=> $page, 'pageSize'=> $pageSize,
+      'total'=> $total, 'totalPages'=> $totalPages,
+      'source'=> 'db'
     ];
   } catch (Throwable $e) {
     error_log('[doGamesList] error: '.$e->getMessage());
@@ -404,7 +423,7 @@ function requestProcessor(array $request) {
 
   case 'games_list':
     $page   = (int)($request['page'] ?? 1);
-    $ps     = (int)($request['pageSize'] ?? 9);
+    $ps     = (int)($request['pageSize'] ?? 50);
     $query  = trim((string)($request['query'] ?? ''));
     $scope  = trim((string)($request['scope'] ?? 'recent'));   // ⬅️ new
     return doGamesList($page, $ps, $query, $scope);
