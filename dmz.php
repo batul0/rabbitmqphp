@@ -78,7 +78,7 @@ function mapRawgItem(array $g): array {
   ];
 }
 
-function doFetchGames(int $page, int $pageSize, string $query): array {
+function doFetchGames(int $page, int $pageSize, string $query, ?string $dates = null, ?string $ordering = null): array {
   $key = rawgApiKey();
   if ($key === '') {
     return ['success'=>false, 'message'=>'RAWG API key not configured on DMZ'];
@@ -92,32 +92,31 @@ function doFetchGames(int $page, int $pageSize, string $query): array {
     'page'      => $page,
     'page_size' => $pageSize,
   ];
-  if ($query !== '') $params['search'] = $query;
+  if ($query !== '')     $params['search']   = $query;
+  if (!empty($dates))    $params['dates']    = $dates;     // e.g., 2025-09-01,2026-01-01
+  if (!empty($ordering)) $params['ordering'] = $ordering;  // e.g., -released
 
   $url = $base . '?' . http_build_query($params);
   $data = httpGetJson($url);
 
   $results = $data['results'] ?? [];
   $items = [];
-  foreach ($results as $g) {
-    $items[] = mapRawgItem($g);
-  }
+  foreach ($results as $g) $items[] = mapRawgItem($g);
 
-  // RAWG gives next/previous; total is not always provided—approximate if needed
   $next  = !empty($data['next']);
-  $prev  = !empty($data['previous']);
-  $totalPages = $next ? $page + 1 : $page; // conservative; DB can compute real total later
+  $totalPages = $next ? $page + 1 : $page;
 
   return [
     'success'    => true,
     'items'      => $items,
     'page'       => $page,
     'pageSize'   => $pageSize,
-    'total'      => null,       // unknown; DB can fill after storing/counting
+    'total'      => null,
     'totalPages' => $totalPages,
     'source'     => 'dmz'
   ];
 }
+
 
 function requestProcessor($req) {
   error_log('DMZ received: '.json_encode($req));
