@@ -180,6 +180,46 @@ function doLogout(string $sessionId): array {
     }
 }
 
+function getGamesPageByDates(PDO $pdo, int $page, int $pageSize, string $from, string $to): array {
+  $page = max(1, $page);
+  $pageSize = max(1, min(50, $pageSize));
+  $offset = ($page - 1) * $pageSize;
+
+  $cnt = $pdo->prepare('SELECT COUNT(*) FROM games WHERE released IS NOT NULL AND released BETWEEN ? AND ?');
+  $cnt->execute([$from, $to]);
+  $total = (int)$cnt->fetchColumn();
+
+  // Order by most recently released first, then name
+  $stmt = $pdo->prepare(
+    'SELECT * FROM games
+     WHERE released IS NOT NULL AND released BETWEEN ? AND ?
+     ORDER BY released DESC, name ASC
+     LIMIT ? OFFSET ?');
+  $stmt->bindValue(1, $from, PDO::PARAM_STR);
+  $stmt->bindValue(2, $to,   PDO::PARAM_STR);
+  $stmt->bindValue(3, $pageSize, PDO::PARAM_INT);
+  $stmt->bindValue(4, $offset,   PDO::PARAM_INT);
+  $stmt->execute();
+
+  $rows = $stmt->fetchAll();
+  $items = [];
+  foreach ($rows as $r) {
+    $items[] = [
+      'rawg_id'          => (int)$r['rawg_id'],
+      'name'             => $r['name'],
+      'released'         => $r['released'],
+      'rating'           => is_null($r['rating']) ? null : (float)$r['rating'],
+      'background_image' => $r['background_image'],
+      'platforms'        => json_decode($r['platforms'] ?? '[]', true) ?: [],
+      'genres'           => json_decode($r['genres'] ?? '[]', true) ?: [],
+    ];
+  }
+
+  $totalPages = max(1, (int)ceil($total / $pageSize));
+  return [$items, $total, $totalPages];
+}
+
+
 function upsertGame(PDO $pdo, array $g): void {
   $stmt = $pdo->prepare(
     'INSERT INTO games (rawg_id, name, released, rating, background_image, platforms, genres)
@@ -247,30 +287,45 @@ function getGamesPage(PDO $pdo, int $page, int $pageSize, string $query): array 
   return [$items, $total, $totalPages];
 }
 
-function doGamesList(int $page, int $pageSize, string $query): array {
+function doGamesList(int $page, int $pageSize, string $query, string $scope = 'recent'): array {
   try {
     $pdo = getPDO();
 
-    // 1) Try DB first
-    list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
+    $page = max(1, $page);
+    $pageSize = max(1, min(50, $pageSize));
 
-    // 2) If DB has nothing for this filter/page, ask DMZ to fetch
+    $today = new DateTimeImmutable('today');
+    $from  = $today->sub(new DateInterval('P30D'))->format('Y-m-d'); // 30 days ago
+    $to    = $today->add(new DateInterval('P90D'))->format('Y-m-d'); // 90 days ahead
+
+    $useRecentWindow = ($scope === 'recent' && $query === '');
+
+    // 1) Try DB first
+    if ($useRecentWindow) {
+      list($items, $total, $totalPages) = getGamesPageByDates($pdo, $page, $pageSize, $from, $to);
+    } else {
+      list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
+    }
+
+    // 2) If DB has nothing, ask DMZ with the right filters
     if (count($items) === 0) {
       $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
-      error_log('[doGamesList] sending to DMZ...');
-      $dmzRes = $dmz->send_request([
+      $dmzReq = [
         'type'     => 'fetch_games',
         'page'     => $page,
         'pageSize' => $pageSize,
         'query'    => $query
-      ]);
-      error_log('[doGamesList] DMZ response: '.json_encode($dmzRes));
+      ];
+      if ($useRecentWindow) {
+        $dmzReq['dates']    = $from . ',' . $to; // RAWG supports dates=YYYY-MM-DD,YYYY-MM-DD
+        $dmzReq['ordering'] = '-released';       // newest releases first
+      }
 
+      $dmzRes = $dmz->send_request($dmzReq);
       if (!is_array($dmzRes) || empty($dmzRes['success'])) {
         return ['success'=>false,'message'=>'DMZ fetch failed'];
       }
 
-      // 3) Store/Upsert results into DB
       $inserted = 0;
       foreach (($dmzRes['items'] ?? []) as $g) {
         if (empty($g['rawg_id'])) continue;
@@ -278,8 +333,12 @@ function doGamesList(int $page, int $pageSize, string $query): array {
         $inserted++;
       }
 
-      // 4) Re-query DB for a consistent page/total
-      list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
+      // Re-query DB for consistent paging/total
+      if ($useRecentWindow) {
+        list($items, $total, $totalPages) = getGamesPageByDates($pdo, $page, $pageSize, $from, $to);
+      } else {
+        list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
+      }
 
       return [
         'success'    => true,
@@ -288,7 +347,8 @@ function doGamesList(int $page, int $pageSize, string $query): array {
         'pageSize'   => $pageSize,
         'total'      => $total,
         'totalPages' => $totalPages,
-        'source'     => ($inserted > 0 ? 'dmz->db' : 'db')
+        'source'     => ($inserted > 0 ? 'dmz->db' : 'db'),
+        'window'     => $useRecentWindow ? ['from'=>$from,'to'=>$to] : null
       ];
     }
 
@@ -300,13 +360,15 @@ function doGamesList(int $page, int $pageSize, string $query): array {
       'pageSize'   => $pageSize,
       'total'      => $total,
       'totalPages' => $totalPages,
-      'source'     => 'db'
+      'source'     => 'db',
+      'window'     => $useRecentWindow ? ['from'=>$from,'to'=>$to] : null
     ];
   } catch (Throwable $e) {
     error_log('[doGamesList] error: '.$e->getMessage());
     return ['success'=>false,'message'=>'Server error'];
   }
 }
+
 
 /**
 * The request dispatcher that RabbitMQ calls per message
@@ -341,10 +403,12 @@ function requestProcessor(array $request) {
     return doLogout($sid);
 
   case 'games_list':
-    $page  = (int)($request['page'] ?? 1);
-    $ps    = (int)($request['pageSize'] ?? 9);
-    $query = trim((string)($request['query'] ?? ''));
-    return doGamesList($page, $ps, $query);
+    $page   = (int)($request['page'] ?? 1);
+    $ps     = (int)($request['pageSize'] ?? 9);
+    $query  = trim((string)($request['query'] ?? ''));
+    $scope  = trim((string)($request['scope'] ?? 'recent'));   // ⬅️ new
+    return doGamesList($page, $ps, $query, $scope);
+
 
 
   default:
