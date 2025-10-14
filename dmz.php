@@ -127,12 +127,14 @@ function requestProcessor($req) {
       $page = (int)($req['page'] ?? 1);
       $ps   = (int)($req['pageSize'] ?? 9);
       $q    = trim((string)($req['query'] ?? ''));
-      try {
-        return doFetchGames($page, $ps, $q);
-      } catch (Throwable $e) {
+      $dates= isset($req['dates']) ? (string)$req['dates'] : null;        // ⬅️ new
+      $ord  = isset($req['ordering']) ? (string)$req['ordering'] : null;  // ⬅️ new
+    try {
+      return doFetchGames($page, $ps, $q, $dates, $ord);
+    } catch (Throwable $e) {
         error_log('DMZ fetch error: '.$e->getMessage());
         return ['success'=>false,'message'=>'DMZ fetch failed'];
-      }
+    }
     default:
       return ['success'=>false,'message'=>'unknown type'];
   }
