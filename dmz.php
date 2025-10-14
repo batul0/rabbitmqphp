@@ -78,13 +78,12 @@ function mapRawgItem(array $g): array {
   ];
 }
 
-function doFetchGames(int $page, int $pageSize, string $query, ?string $dates = null, ?string $ordering = null): array {
+function doFetchGames(int $page, int $pageSize, string $query, ?string $dates = null, ?string $ordering = null, ?bool $search_precise = null): array {
   $key = rawgApiKey();
-  if ($key === '') {
-    return ['success'=>false, 'message'=>'RAWG API key not configured on DMZ'];
-  }
+  if ($key === '') return ['success'=>false, 'message'=>'RAWG API key not configured on DMZ'];
+
   $page = max(1, $page);
-  $pageSize = min(40, max(1, $pageSize)); // RAWG page_size limit
+  $pageSize = min(40, max(1, $pageSize));
 
   $base = 'https://api.rawg.io/api/games';
   $params = [
@@ -92,16 +91,16 @@ function doFetchGames(int $page, int $pageSize, string $query, ?string $dates = 
     'page'      => $page,
     'page_size' => $pageSize,
   ];
-  if ($query !== '')     $params['search']   = $query;
-  if (!empty($dates))    $params['dates']    = $dates;     // e.g., 2025-09-01,2026-01-01
-  if (!empty($ordering)) $params['ordering'] = $ordering;  // e.g., -released
+  if ($query !== '')            $params['search'] = $query;
+  if (!empty($dates))           $params['dates'] = $dates;           // YYYY-MM-DD,YYYY-MM-DD
+  if (!empty($ordering))        $params['ordering'] = $ordering;     // e.g., -released, -rating
+  if ($search_precise !== null) $params['search_precise'] = $search_precise ? 'true' : 'false';
 
   $url = $base . '?' . http_build_query($params);
   $data = httpGetJson($url);
 
-  $results = $data['results'] ?? [];
   $items = [];
-  foreach ($results as $g) $items[] = mapRawgItem($g);
+  foreach (($data['results'] ?? []) as $g) $items[] = mapRawgItem($g);
 
   $next  = !empty($data['next']);
   $totalPages = $next ? $page + 1 : $page;
@@ -118,22 +117,25 @@ function doFetchGames(int $page, int $pageSize, string $query, ?string $dates = 
 }
 
 
+
 function requestProcessor($req) {
   error_log('DMZ received: '.json_encode($req));
   if (!isset($req['type'])) return ['success'=>false,'message'=>'unsupported message type'];
   switch ($req['type']) {
     case 'fetch_games':
-      $page = (int)($req['page'] ?? 1);
-      $ps   = (int)($req['pageSize'] ?? 9);
-      $q    = trim((string)($req['query'] ?? ''));
-      $dates= isset($req['dates']) ? (string)$req['dates'] : null;        // ⬅️ new
-      $ord  = isset($req['ordering']) ? (string)$req['ordering'] : null;  // ⬅️ new
-    try {
-      return doFetchGames($page, $ps, $q, $dates, $ord);
-    } catch (Throwable $e) {
-        error_log('DMZ fetch error: '.$e->getMessage());
-        return ['success'=>false,'message'=>'DMZ fetch failed'];
-    }
+  $page = (int)($req['page'] ?? 1);
+  $ps   = (int)($req['pageSize'] ?? 9);
+  $q    = trim((string)($req['query'] ?? ''));
+  $dates= isset($req['dates']) ? (string)$req['dates'] : null;
+  $ord  = isset($req['ordering']) ? (string)$req['ordering'] : null;
+  $prec = isset($req['search_precise']) ? (bool)$req['search_precise'] : null;
+  try {
+    return doFetchGames($page, $ps, $q, $dates, $ord, $prec);
+  } catch (Throwable $e) {
+    error_log('DMZ fetch error: '.$e->getMessage());
+    return ['success'=>false,'message'=>'DMZ fetch failed'];
+  }
+
     default:
       return ['success'=>false,'message'=>'unknown type'];
   }
