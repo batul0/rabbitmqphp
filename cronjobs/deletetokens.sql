@@ -1,0 +1,2 @@
+DELETE FROM sessions
+WHERE `expire` < CURRENT_TIMESTAMP;
