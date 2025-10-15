@@ -298,49 +298,57 @@ function doGamesList(int $page, int $pageSize, string $query, string $scope = 'r
     $to    = $today->add(new DateInterval('P90D'))->format('Y-m-d'); // 90 days ahead
     $useRecent = ($scope === 'recent' && $query === '');
 
+    // ----- SEARCH: DB cache first, DMZ only if empty -----
     if ($scope === 'search' && $query !== '') {
-      // 1) Always ask DMZ first for fresh relevant results (search)
+      // try DB cache
+      list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
+      if ($total > 0) {
+        return [
+          'success'=> true, 'items'=> $items,
+          'page'=> $page, 'pageSize'=> $pageSize,
+          'total'=> $total, 'totalPages'=> $totalPages,
+          'source'=> 'db-cache'
+        ];
+      }
+
+      // cache empty -> ask DMZ/RAWG
       $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
       $dmzRes = $dmz->send_request([
         'type'           => 'fetch_games',
         'page'           => $page,
         'pageSize'       => $pageSize,
         'query'          => $query,
-        'search_precise' => false,      // let RAWG return related titles
-        'ordering'       => '-rating'   // prefer popular/highly rated first
+        'search_precise' => false,     // related titles ok
+        'ordering'       => '-rating'  // better results first
       ]);
 
       if (!is_array($dmzRes) || empty($dmzRes['success'])) {
-        // fallback to whatever we may have cached
-        list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
+        // still return empty page (no crash)
         return [
-          'success'=> true,
-          'items'=> $items,
-          'page'=> $page, 'pageSize'=> $pageSize,
-          'total'=> $total, 'totalPages'=> $totalPages,
-          'source'=> 'db-fallback'
+          'success'=> true, 'items'=> [],
+          'page'=> 1, 'pageSize'=> $pageSize,
+          'total'=> 0, 'totalPages'=> 1,
+          'source'=> 'dmz-failed'
         ];
       }
 
-      // 2) Upsert DMZ items into DB
+      // upsert returned items
       foreach (($dmzRes['items'] ?? []) as $g) {
         if (!empty($g['rawg_id'])) upsertGame($pdo, $g);
       }
 
-      // 3) Return page from DB for stable pagination
+      // re-query DB to return a stable page
       list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
       return [
-        'success'=> true,
-        'items'=> $items,
+        'success'=> true, 'items'=> $items,
         'page'=> $page, 'pageSize'=> $pageSize,
         'total'=> $total, 'totalPages'=> $totalPages,
         'source'=> 'dmz->db'
       ];
     }
 
-    // RECENT (upcoming + newly released)
+    // ----- RECENT feed (upcoming + newly released) -----
     if ($useRecent) {
-      // try DB first
       list($items, $total, $totalPages) = getGamesPageByDates($pdo, $page, $pageSize, $from, $to);
       if (count($items) === 0) {
         $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
@@ -365,7 +373,6 @@ function doGamesList(int $page, int $pageSize, string $query, string $scope = 'r
           ];
         }
       }
-      // DB had data (or DMZ failed but DB has something)
       return [
         'success'=> true, 'items'=> $items,
         'page'=> $page, 'pageSize'=> $pageSize,
@@ -374,7 +381,7 @@ function doGamesList(int $page, int $pageSize, string $query, string $scope = 'r
       ];
     }
 
-    // default fallback: plain DB listing (shouldn’t hit normally)
+    // fallback
     list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
     return [
       'success'=> true, 'items'=> $items,
@@ -387,6 +394,7 @@ function doGamesList(int $page, int $pageSize, string $query, string $scope = 'r
     return ['success'=>false,'message'=>'Server error'];
   }
 }
+
 
 
 /**
