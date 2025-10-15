@@ -5,6 +5,11 @@ require_once('path.inc');
 require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc');
 
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+ini_set('error_log', '/var/log/db_listener.log');
+
 
 /* =======================
   CONFIG: MySQL settings
@@ -310,9 +315,10 @@ function doGamesList(int $page, int $pageSize, string $query, string $scope = 'r
           'source'=> 'db-cache'
         ];
       }
-
+      error_log("[DB] doGamesList scope=$scope query='$query' page=$page pageSize=$pageSize");
       // cache empty -> ask DMZ/RAWG
       $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
+      error_log("[DB] -> DMZ send fetch_games …");
       $dmzRes = $dmz->send_request([
         'type'           => 'fetch_games',
         'page'           => $page,
@@ -321,7 +327,7 @@ function doGamesList(int $page, int $pageSize, string $query, string $scope = 'r
         'search_precise' => false,     // related titles ok
         'ordering'       => '-rating'  // better results first
       ]);
-
+      error_log("[DB] <- DMZ response: " . json_encode($dmzRes));
       if (!is_array($dmzRes) || empty($dmzRes['success'])) {
         // still return empty page (no crash)
         return [
@@ -331,7 +337,7 @@ function doGamesList(int $page, int $pageSize, string $query, string $scope = 'r
           'source'=> 'dmz-failed'
         ];
       }
-
+      error_log("[DB] upsert count=" . count($dmzRes['items'] ?? []));
       // upsert returned items
       foreach (($dmzRes['items'] ?? []) as $g) {
         if (!empty($g['rawg_id'])) upsertGame($pdo, $g);
@@ -401,6 +407,7 @@ function doGamesList(int $page, int $pageSize, string $query, string $scope = 'r
 * The request dispatcher that RabbitMQ calls per message
 */
 function requestProcessor(array $request) {
+error_log("[DB] RX request: " . json_encode($request));
  echo "Received request:\n";
  var_dump($request);
 
