@@ -1,49 +1,40 @@
 <?php
-// games.php
+declare(strict_types=1);
+
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE & ~E_WARNING);
 ini_set('display_errors', 0);
-ini_set('log_errors', 1);
-ini_set('error_log', '/tmp/games_php_errors.log');
-
 header('Content-Type: application/json');
 
-// Basic input
-$page     = isset($_POST['page']) ? max(1, (int)$_POST['page']) : 1;
-$pageSize = isset($_POST['pageSize']) ? max(1, min(50, (int)$_POST['pageSize'])) : 9;
-$query    = isset($_POST['query']) ? trim($_POST['query']) : '';
-
-// Require session cookie (optional—home.php already guards)
-$sid = $_COOKIE['sid'] ?? '';
-if ($sid === '') {
-  echo json_encode(['success' => false, 'message' => 'Not authenticated']); exit;
-}
+require_once('/home/vboxuser/git/rabbitmqphp/path.inc');
+require_once('/home/vboxuser/git/rabbitmqphp/get_host_info.inc');
+require_once('/home/vboxuser/git/rabbitmqphp/rabbitMQLib.inc');
 
 try {
-  require_once('/home/vboxuser/git/rabbitmqphp/path.inc');
-  require_once('/home/vboxuser/git/rabbitmqphp/get_host_info.inc');
-  require_once('/home/vboxuser/git/rabbitmqphp/rabbitMQLib.inc');
+  $page     = isset($_POST['page']) ? (int)$_POST['page'] : 1;
+  $pageSize = isset($_POST['pageSize']) ? (int)$_POST['pageSize'] : 9;
+  $scope    = isset($_POST['scope']) ? (string)$_POST['scope'] : 'recent';
+  $query    = isset($_POST['query']) ? trim((string)$_POST['query']) : '';
 
-  $client = new rabbitMQClient('testRabbitMQ.ini', 'loginServer');
-
-  // Send a request that your DB listener will handle
-  $req = [
-    'type'     => 'games_list',   // << implement this on the DB listener
-    'page'     => $page,
-    'pageSize' => $pageSize,
-    'query'    => $query,
-    // Optionally forward user/session info if you need per-user caching
-    'sessionId'=> $sid
+  $payload = [
+    'type'     => 'games_list',
+    'page'     => max(1, $page),
+    'pageSize' => max(1, min(50, $pageSize)),
   ];
 
-  $res = $client->send_request($req);
+  if ($scope === 'search' && $query !== '') {
+    $payload['scope'] = 'search';
+    $payload['query'] = $query;
+  } else {
+    $payload['scope'] = 'recent'; // default feed
+  }
+
+  $client = new rabbitMQClient('testRabbitMQ.ini', 'loginServer');
+  $res = $client->send_request($payload);
 
   if (!is_array($res)) {
-    echo json_encode(['success'=>false,'message'=>'Invalid response from server']); exit;
+    echo json_encode(['success'=>false,'message'=>'Invalid server response']); exit;
   }
-  // Pass through
   echo json_encode($res);
 } catch (Throwable $e) {
-  error_log('games.php error: ' . $e->getMessage());
   echo json_encode(['success'=>false,'message'=>'Server error']);
 }
-?>
