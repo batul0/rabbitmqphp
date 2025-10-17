@@ -227,92 +227,161 @@ function getGamesPage(PDO $pdo, int $page, int $pageSize, string $query): array 
 }
 
 /** 🔍 Search flow: DB-first; if empty -> DMZ search -> upsert -> return DB page */
+/** 🔎 SEARCH: Always DMZ-first by relevance; upsert into DB for caching */
 function doGamesSearch(int $page, int $pageSize, string $query): array {
-  $pdo = getPDO();
-  // 1) Try DB
-  list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
-  if ($total > 0) {
-    return [
-      'success'=>true, 'items'=>$items,
-      'page'=>$page, 'pageSize'=>$pageSize, 'total'=>$total, 'totalPages'=>$totalPages,
-      'source'=>'db'
-    ];
+  $query = trim($query);
+  if ($query === '') {
+    // Empty search should behave like "recent" feed handled elsewhere
+    return ['success' => true, 'items' => [], 'page' => 1, 'pageSize' => $pageSize, 'total' => 0, 'totalPages' => 1, 'source' => 'none'];
   }
 
-  // 2) DB is empty for this query → ask DMZ
-  $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
-  $dmzRes = $dmz->send_request([
-    'type'           => 'fetch_games',
-    'page'           => $page,
-    'pageSize'       => $pageSize,
-    'query'          => $query,
-    'search_precise' => false,
-    'ordering'       => '-rating'
-  ]);
+  try {
+    // 1) Ask DMZ directly; DO NOT force "ordering" so RAWG ranks by relevance.
+    $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
+    $dmzRes = $dmz->send_request([
+      'type'           => 'fetch_games',
+      'page'           => max(1, $page),
+      'pageSize'       => max(1, min(40, $pageSize)), // RAWG max is 40
+      'query'          => $query,
+      'search_precise' => false
+      // no 'ordering' here — leave RAWG’s relevance ranking
+    ]);
 
-  if (is_array($dmzRes) && !empty($dmzRes['success'])) {
-    foreach (($dmzRes['items'] ?? []) as $g) {
-      if (!empty($g['rawg_id'])) upsertGame($pdo, $g);
+    if (!is_array($dmzRes) || empty($dmzRes['success'])) {
+      return ['success'=>false,'message'=>'DMZ search failed'];
     }
-    // 3) Return DB page again after upsert
-    list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
-    return [
-      'success'=>true, 'items'=>$items,
-      'page'=>$page, 'pageSize'=>$pageSize, 'total'=>$total, 'totalPages'=>$totalPages,
-      'source'=>'dmz->db'
-    ];
-  }
 
-  // 4) DMZ failed and DB had nothing
-  return ['success'=>true,'items'=>[],'page'=>1,'pageSize'=>$pageSize,'total'=>0,'totalPages'=>1,'source'=>'none'];
+    // 2) Upsert into DB for caching (non-blocking feel, but done inline here)
+    try {
+      $pdo = getPDO();
+      foreach (($dmzRes['items'] ?? []) as $g) {
+        if (!empty($g['rawg_id'])) upsertGame($pdo, $g);
+      }
+    } catch (Throwable $e) {
+      // Cache failure should NOT break search results
+      error_log('[doGamesSearch] upsert cache warning: ' . $e->getMessage());
+    }
+
+    // 3) Return RAWG page directly (carry over pagination fields from DMZ)
+    // DMZ already computes `totalPages` using the 'next' link heuristic.
+    return [
+      'success'    => true,
+      'items'      => $dmzRes['items'] ?? [],
+      'page'       => $dmzRes['page'] ?? $page,
+      'pageSize'   => $dmzRes['pageSize'] ?? $pageSize,
+      'total'      => $dmzRes['total'] ?? null,          // RAWG doesn’t return a true total; may be null
+      'totalPages' => $dmzRes['totalPages'] ?? ($dmzRes['next'] ? ($page+1) : $page),
+      'source'     => 'dmz'
+    ];
+
+  } catch (Throwable $e) {
+    error_log('[doGamesSearch] error: ' . $e->getMessage());
+    return ['success' => false, 'message' => 'Server error'];
+  }
 }
 
-/** Main list handler with RECENT window + search */
+/**
+ * Ensure the DB has enough rows to serve the requested "recent" page.
+ * If not, call DMZ with the same dates window and upsert until we can.
+ * Hard stop after a few rounds so we never loop forever.
+ */
+function backfillRecentWindow(PDO $pdo, int $needUpToPage, int $pageSize, string $from, string $to): void {
+  $MAX_ROUNDS = 6; // safety
+  $round = 0;
+
+  // Count how many rows currently available in the window
+  $cnt = $pdo->prepare('SELECT COUNT(*) FROM games WHERE released IS NOT NULL AND released BETWEEN ? AND ?');
+  $cnt->execute([$from, $to]);
+  $total = (int)$cnt->fetchColumn();
+
+  // We need at least this many rows to cover pages 1..needUpToPage
+  $target = $needUpToPage * $pageSize;
+
+  while ($total < $target && $round < $MAX_ROUNDS) {
+    $round++;
+
+    // Figure which DMZ page to fetch to make incremental progress
+    // Example: if we have 0 rows, fetch DMZ page 1; if we have 27 rows, fetch page floor(27/ps)+1
+    $dmzPage = (int)floor($total / $pageSize) + 1;
+
+    $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
+    $dmzRes = $dmz->send_request([
+      'type'     => 'fetch_games',
+      'page'     => $dmzPage,
+      'pageSize' => $pageSize,
+      'query'    => '',
+      'dates'    => $from . ',' . $to,
+      'ordering' => '-released'
+    ]);
+
+    if (!is_array($dmzRes) || empty($dmzRes['success'])) {
+      error_log('[backfillRecentWindow] DMZ fetch failed on round ' . $round);
+      break; // don’t spin if DMZ is failing
+    }
+
+    $fetched = 0;
+    foreach (($dmzRes['items'] ?? []) as $g) {
+      if (!empty($g['rawg_id'])) {
+        upsertGame($pdo, $g);
+        $fetched++;
+      }
+    }
+
+    // Recount after upsert
+    $cnt->execute([$from, $to]);
+    $total = (int)$cnt->fetchColumn();
+
+    // RAWG page might be empty; stop if no progress
+    if ($fetched === 0) break;
+  }
+}
+
+
 function doGamesList(int $page, int $pageSize, string $query, string $scope = 'recent'): array {
   try {
     $pdo = getPDO();
     $page     = max(1, $page);
     $pageSize = max(1, min(50, $pageSize));
 
-    // Window: first day of last month → last day of this month
+    // Time window: first day of last month → last day of this month
     $start = (new DateTimeImmutable('first day of last month'))->format('Y-m-d');
     $end   = (new DateTimeImmutable('last day of this month'))->format('Y-m-d');
 
-    // 🔎 New scope: 'search' (DB-first, DMZ on miss)
+    // --- SEARCH: always DMZ-first (already fixed in Issue #1) ---
     if ($scope === 'search' && $query !== '') {
       return doGamesSearch($page, $pageSize, $query);
     }
 
-    // RECENT (default)
+    // --- RECENT: DB-first + backfill from DMZ as needed ---
     if ($scope === 'recent' && $query === '') {
-      // DB first
+      // Ensure DB has enough rows for this page. If not, fetch+cache from DMZ.
+      backfillRecentWindow($pdo, $page, $pageSize, $start, $end);
+
+      // Now serve the requested page from DB
       list($items, $total, $totalPages) = getGamesPageByDates($pdo, $page, $pageSize, $start, $end);
-      if (count($items) === 0) {
-        // Ask DMZ to fill the window
-        $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
-        $dmzRes = $dmz->send_request([
-          'type'     => 'fetch_games',
-          'page'     => $page,
-          'pageSize' => $pageSize,
-          'query'    => '',
-          'dates'    => $start . ',' . $end,
-          'ordering' => '-released'
-        ]);
-        if (is_array($dmzRes) && !empty($dmzRes['success'])) {
-          foreach (($dmzRes['items'] ?? []) as $g) {
-            if (!empty($g['rawg_id'])) upsertGame($pdo, $g);
-          }
-          list($items, $total, $totalPages) = getGamesPageByDates($pdo, $page, $pageSize, $start, $end);
-          return ['success'=>true,'items'=>$items,'page'=>$page,'pageSize'=>$pageSize,'total'=>$total,'totalPages'=>$totalPages,'source'=>'dmz->db','window'=>['from'=>$start,'to'=>$end]];
-        }
+
+      // If we still couldn't fill, try one last backfill burst (race conditions or first-time run)
+      if ($total < ($page * $pageSize)) {
+        backfillRecentWindow($pdo, $page, $pageSize, $start, $end);
+        list($items, $total, $totalPages) = getGamesPageByDates($pdo, $page, $pageSize, $start, $end);
       }
-      // DB had data (or DMZ failed but DB has something)
-      return ['success'=>true,'items'=>$items,'page'=>$page,'pageSize'=>$pageSize,'total'=>$total,'totalPages'=>$totalPages,'source'=>'db','window'=>['from'=>$start,'to'=>$end]];
+
+      return [
+        'success'    => true,
+        'items'      => $items,
+        'page'       => $page,
+        'pageSize'   => $pageSize,
+        'total'      => $total,
+        'totalPages' => $totalPages,
+        'source'     => 'db',
+        'window'     => ['from'=>$start,'to'=>$end]
+      ];
     }
 
-    // Fallback: plain DB page
+    // Fallback: plain DB page (name sorting)
     list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
     return ['success'=>true,'items'=>$items,'page'=>$page,'pageSize'=>$pageSize,'total'=>$total,'totalPages'=>$totalPages,'source'=>'db'];
+
   } catch (Throwable $e) {
     error_log('[doGamesList] error: '.$e->getMessage());
     return ['success'=>false,'message'=>'Server error'];
