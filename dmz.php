@@ -31,9 +31,7 @@ function loadDotEnv(string $file): void {
 }
 loadDotEnv(__DIR__ . '/.env');
 
-function rawgApiKey(): string {
-  return (string)(getenv('RAWG_API_KEY') ?: '');
-}
+function rawgApiKey(): string { return (string)(getenv('RAWG_API_KEY') ?: ''); }
 
 function httpGetJson(string $url, int $timeout = 15): array {
   $ch = curl_init($url);
@@ -53,12 +51,11 @@ function httpGetJson(string $url, int $timeout = 15): array {
     throw new RuntimeException("HTTP $code $err");
   }
   $json = json_decode((string)$body, true);
-  if (!is_array($json)) {
-    throw new RuntimeException("Invalid JSON");
-  }
+  if (!is_array($json)) throw new RuntimeException("Invalid JSON");
   return $json;
 }
 
+/** --- LIST MAPPING --- */
 function mapRawgItem(array $g): array {
   $platforms = [];
   if (!empty($g['platforms']) && is_array($g['platforms'])) {
@@ -73,8 +70,7 @@ function mapRawgItem(array $g): array {
     }
   }
   return [
-    // Add a plain "id" because the web UI expects g.id
-    'id'               => $g['id'] ?? null,
+    'id'               => $g['id'] ?? null,              // plain id for UI
     'rawg_id'          => $g['id'] ?? null,
     'name'             => $g['name'] ?? '',
     'released'         => $g['released'] ?? null,
@@ -84,7 +80,6 @@ function mapRawgItem(array $g): array {
     'genres'           => $genres,
   ];
 }
-
 
 /** RAWG fetch (supports query, dates, ordering, page/pageSize) */
 function doFetchGames(
@@ -109,7 +104,6 @@ function doFetchGames(
   if ($search_precise !== null) $params['search_precise'] = $search_precise ? 'true' : 'false';
 
   error_log("[DMZ] doFetchGames ENTER page=$page size=$pageSize q='$query' dates='".($dates??'')."' ord='".($ordering??'')."' precise=".var_export($search_precise, true));
-
   $url  = $base . '?' . http_build_query($params);
   $data = httpGetJson($url);
 
@@ -138,12 +132,78 @@ function doFetchGames(
   ];
 }
 
+/** --- DETAILS MAPPING --- */
+function mapRawgDetail(array $d): array {
+  $toNames = function($arr, $key='name'){
+    $out = [];
+    if (is_array($arr)) {
+      foreach ($arr as $x) {
+        if (is_array($x)) {
+          if (isset($x['platform'][$key])) $out[] = $x['platform'][$key];
+          elseif (isset($x['store'][$key])) $out[] = $x['store'][$key];
+          elseif (isset($x[$key])) $out[] = $x[$key];
+        }
+      }
+    }
+    return array_values(array_unique(array_filter($out)));
+  };
+
+  return [
+    'id'               => $d['id'] ?? null,
+    'rawg_id'          => $d['id'] ?? null,
+    'name'             => $d['name'] ?? '',
+    'slug'             => $d['slug'] ?? '',
+    'description'      => $d['description'] ?? null,
+    'description_raw'  => $d['description_raw'] ?? null,
+    'released'         => $d['released'] ?? null,
+    'background_image' => $d['background_image'] ?? null,
+    'background_image_additional' => $d['background_image_additional'] ?? null,
+    'metacritic'       => $d['metacritic'] ?? null,
+    'rating'           => isset($d['rating']) ? (float)$d['rating'] : null,
+    'ratings_count'    => $d['ratings_count'] ?? null,
+    'playtime'         => $d['playtime'] ?? null,
+    'website'          => $d['website'] ?? null,
+    'reddit_url'       => $d['reddit_url'] ?? null,
+    'esrb_rating'      => $d['esrb_rating']['name'] ?? null,
+    'platforms'        => $toNames($d['platforms'] ?? []),
+    'genres'           => $toNames($d['genres'] ?? []),
+    'tags'             => $toNames($d['tags'] ?? []),
+    'stores'           => $toNames($d['stores'] ?? []),
+    'developers'       => $toNames($d['developers'] ?? []),
+    'publishers'       => $toNames($d['publishers'] ?? []),
+    'screenshots'      => [],
+  ];
+}
+
+function doFetchGameDetails(int $id): array {
+  $key = rawgApiKey();
+  if ($key === '') return ['success'=>false,'message'=>'RAWG API key not configured on DMZ'];
+  if ($id <= 0)     return ['success'=>false,'message'=>'Invalid game id'];
+
+  $url = 'https://api.rawg.io/api/games/' . urlencode((string)$id) . '?key=' . urlencode($key);
+  $detail = httpGetJson($url);
+  $mapped = mapRawgDetail($detail);
+
+  // screenshots (optional)
+  try {
+    $shotsUrl = 'https://api.rawg.io/api/games/' . urlencode((string)$id) . '/screenshots?key=' . urlencode($key);
+    $shots = httpGetJson($shotsUrl);
+    $imgs = [];
+    foreach ($shots['results'] ?? [] as $s) {
+      if (!empty($s['image'])) $imgs[] = $s['image'];
+    }
+    $mapped['screenshots'] = $imgs;
+  } catch (Throwable $e) { /* ignore */ }
+
+  return ['success'=>true, 'item'=>$mapped, 'source'=>'dmz'];
+}
+
 function requestProcessor($req) {
   error_log('[DMZ] received: '.json_encode($req));
   if (!isset($req['type'])) return ['success'=>false,'message'=>'unsupported message type'];
 
   switch ($req['type']) {
-    case 'fetch_games':
+    case 'fetch_games': {
       $page = (int)($req['page'] ?? 1);
       $ps   = (int)($req['pageSize'] ?? 9);
       $q    = trim((string)($req['query'] ?? ''));
@@ -158,6 +218,16 @@ function requestProcessor($req) {
         error_log('DMZ fetch error: '.$e->getMessage());
         return ['success'=>false,'message'=>'DMZ fetch failed'];
       }
+    }
+    case 'fetch_game_details': {
+      try {
+        $id = (int)($req['id'] ?? 0);
+        return doFetchGameDetails($id);
+      } catch (Throwable $e) {
+        error_log('DMZ details error: '.$e->getMessage());
+        return ['success'=>false,'message'=>'DMZ details failed'];
+      }
+    }
     default:
       return ['success'=>false,'message'=>'unknown type'];
   }
@@ -167,3 +237,4 @@ $server = new rabbitMQServer('testRabbitMQ.ini', 'dmzServer');
 echo "dmzFetcher BEGIN\n";
 $server->process_requests('requestProcessor');
 echo "dmzFetcher END\n";
+?>
