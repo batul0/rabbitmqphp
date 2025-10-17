@@ -1,5 +1,5 @@
 <?php
-// --- Auth guard (same as before) ---
+// --- Auth guard ---
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE & ~E_WARNING);
 ini_set('display_errors', 0);
 
@@ -25,578 +25,543 @@ try {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Home • GameHub</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <style>
-    :root{
-      --bg1:#0f0f14; --bg2:#15151f; --card:#1c1c29; --text:#e8e8ff; --muted:#a9a9c1;
-      --accent:#7c4dff; --accent-2:#00ffc6; --chip:#2b2b3b;
+    :root {
+      --bg1: #0f0f14; --bg2: #15151f; --card: #1c1c29; --text: #e8e8ff; --muted: #a9a9c1;
+      --accent: #7c4dff; --accent-2: #00ffc6; --chip: #2b2b3b; --sidebar-width: 250px;
     }
-    html,body{height:100%}
-    body{
-      background:
-        radial-gradient(1200px 600px at 15% 0%, #18182a 0%, var(--bg1) 60%) fixed,
-        linear-gradient(180deg, var(--bg1), var(--bg2)) fixed;
-      color:var(--text);
-      min-height:100vh; padding-bottom:24px;
+    body {
+      background: radial-gradient(1200px 600px at 15% 0%, #18182a 0%, var(--bg1) 60%) fixed,
+                  linear-gradient(180deg, var(--bg1), var(--bg2)) fixed;
+      color: var(--text); min-height: 100vh; padding-bottom: 80px;
     }
-    .navbar{
-      background:rgba(16,16,26,.9);
-      backdrop-filter:blur(8px);
-      border-bottom:1px solid rgba(124,77,255,.25);
+    .container-fluid { display: flex; padding: 0; }
+    .sidebar {
+      width: var(--sidebar-width); background-color: var(--bg2); position: fixed; height: 100vh;
+      padding-top: 60px; overflow-y: auto; border-right: 1px solid rgba(124,77,255,0.25);
     }
-    .brand-text{
-      font-weight:800; letter-spacing:.5px;
-      background:linear-gradient(90deg, var(--accent), var(--accent-2));
-      -webkit-background-clip:text; background-clip:text; color:transparent;
+    .sidebar-nav a {
+      display: block; color: var(--muted); text-decoration: none; padding: 12px 16px; margin-bottom: 4px;
+      border-radius: 8px; transition: background-color .2s, color .2s;
     }
-    .hero{
-      background:linear-gradient(180deg, rgba(124,77,255,.15), rgba(0,0,0,0));
-      border-bottom:1px solid rgba(124,77,255,.15);
+    .sidebar-nav a:hover { background-color: var(--chip); color: var(--text); }
+    .sidebar-nav a.active { background-color: var(--chip); color: var(--text);
+      border-left: 3px solid var(--accent-2); font-weight: 600; }
+    .main-content { margin-left: var(--sidebar-width); flex: 1; }
+    .navbar {
+      background: rgba(16,16,26,0.9); backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(124,77,255,0.25); z-index: 1030; padding-left: 35px;
     }
-    /* Sidebar */
-    .sidebar{
-      background:#12121b;
-      border:1px solid rgba(124,77,255,.25);
-      border-radius:14px;
-      padding:16px;
-      position:sticky; top:88px;
+    .brand-text {
+      font-weight: 800; letter-spacing: .5px; background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 1.5rem;
     }
-    .sidebar .section-title{
-      font-size:.9rem; color:var(--muted); letter-spacing:.08em; text-transform:uppercase;
-      margin-bottom:.5rem;
-    }
-    .side-link{
-      display:flex; align-items:center; gap:.5rem;
-      padding:.6rem .75rem; border-radius:10px; text-decoration:none;
-      color:var(--text); border:1px solid rgba(124,77,255,.18);
-      background:linear-gradient(180deg,#1a1a27,#141420);
-      transition: border-color .15s, box-shadow .15s, background .15s;
-      margin-bottom:.5rem;
-    }
-    .side-link:hover{ border-color:rgba(0,255,198,.35); box-shadow:0 0 0 .1rem rgba(0,255,198,.15) inset; }
-    .side-link.active{
-      border-color:rgba(0,255,198,.45);
-      background:linear-gradient(180deg,#1f1f2f,#181826);
-      box-shadow:0 0 0 .15rem rgba(0,255,198,.12) inset;
-    }
+    .hero { background: linear-gradient(180deg, rgba(124,77,255,.15), transparent);
+      border-bottom: 1px solid rgba(124,77,255,0.15); }
+    .search-wrap { background:#12121b; border:1px solid rgba(124,77,255,0.25); border-radius:14px; padding:16px; }
+    .form-control, .btn { border-radius:10px; }
+    .btn-dark { background: linear-gradient(135deg,#2a2a3a,#1b1b29); border:1px solid rgba(124,77,255,0.35); }
+    .btn-dark:hover { border-color: var(--accent); box-shadow: 0 0 0 .2rem rgba(124,77,255,0.25); }
+    .game-card { background: var(--card); border:1px solid rgba(124,77,255,0.18); border-radius:16px; overflow:hidden;
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+    .game-card:hover { transform: translateY(-4px); border-color: rgba(0,255,198,0.35);
+      box-shadow: 0 10px 24px rgba(0,0,0,.35), 0 0 0 1px rgba(0,255,198,0.2) inset; }
+    .game-img { aspect-ratio:16/9; object-fit:cover; background:#0b0b12; }
+    .badge-chip { background: var(--chip); border:1px solid rgba(124,77,255,0.35); color: var(--muted); font-weight:600; }
+    .rating-badge { background: linear-gradient(180deg,#1f1f2f,#181826); border:1px solid rgba(0,255,198,0.45);
+      color: var(--accent-2); font-weight:700; }
+    .alert { border-radius:12px; border:1px solid rgba(124,77,255,0.35); background:#141420; color:var(--text); }
+    footer { background:#0f0f16; border-top:1px solid rgba(124,77,255,0.2); color:var(--muted); }
 
-    .search-wrap{
-      background:#12121b; border:1px solid rgba(124,77,255,.25);
-      border-radius:14px; padding:16px;
-    }
-    .form-control,.btn{border-radius:10px}
-    .btn-dark{
-      background:linear-gradient(135deg,#2a2a3a,#1b1b29);
-      border:1px solid rgba(124,77,255,.35);
-    }
-    .btn-dark:hover{ border-color:var(--accent); box-shadow:0 0 0 .2rem rgba(124,77,255,.25); }
+    .content-display { opacity:0; transform:scale(0.98); visibility:hidden; transition: opacity .3s, transform .3s, visibility .3s; }
+    .content-display.active-section { opacity:1; transform:scale(1); visibility:visible; }
 
-    .game-card{
-      background:var(--card);
-      border:1px solid rgba(124,77,255,.18);
-      border-radius:16px; overflow:hidden;
-      transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-      display:flex; flex-direction:column;
-    }
-    .game-card:hover{
-      transform:translateY(-4px);
-      border-color:rgba(0,255,198,.35);
-      box-shadow:0 10px 24px rgba(0,0,0,.35), 0 0 0 1px rgba(0,255,198,.2) inset;
-    }
-    .game-img{aspect-ratio:16/9; object-fit:cover; background:#0b0b12}
-    .badge-chip{ background:var(--chip); border:1px solid rgba(124,77,255,.35); color:var(--muted); font-weight:600; }
-    .rating-badge{ background:linear-gradient(180deg,#1f1f2f,#181826); border:1px solid rgba(0,255,198,.45); color:var(--accent-2); font-weight:700; }
-    .alert{ border-radius:12px; border:1px solid rgba(124,77,255,.35); background:#141420; color:var(--text); }
-    .footer-fade{color:var(--muted); opacity:.85}
-    .card-actions .btn{min-width:88px}
-
-    /* Offcanvas */
-    .offcanvas{ background:#12121b; color:var(--text); }
-    .offcanvas .btn-close{ filter:invert(1) grayscale(1); }
+    /* forum styles */
+    .comment-section{ background: var(--card); border:1px solid rgba(124,77,255,0.18); border-radius:16px; overflow:hidden;
+      margin:20px auto; max-width:650px; box-shadow:0 4px 10px rgba(0,0,0,0.25); }
+    .comment-header{ cursor:pointer; background-color: var(--chip); padding:15px; border-bottom:1px solid rgba(124,77,255,0.25);
+      display:flex; align-items:center; justify-content:space-between; font-weight:600; }
+    .comment-header:hover{ background-color:#2b2b4c; }
+    .comment-header h3{ margin:0; color:var(--text); font-size:1.25rem; }
+    #forum-comment-container{ padding:15px; max-height:0; overflow:hidden; transition:max-height .3s, padding .3s; }
+    #forum-comment-container.is-expanded{ max-height:600px; }
+    #forum-comment-list { padding:0; margin:0; }
+    .forum-comment{ background: var(--bg2); border-radius:10px; padding:10px 14px; margin-bottom:12px;
+      border-left:3px solid var(--accent-2); list-style:none; word-wrap: break-word; }
+    .forum-comment .meta{ display:flex; gap:8px; align-items:baseline; margin-bottom:4px; }
+    .forum-comment .meta strong{ color: var(--accent-2); font-size:.95rem; }
+    .forum-comment .meta small{ color: var(--muted); font-size:.8rem; }
+    #forum-comment-form{ margin-top:20px; display:flex; gap:10px; }
+    #forum-comment-form textarea{ flex-grow:1; background-color: var(--bg2); border:1px solid rgba(124,77,255,0.35);
+      border-radius:10px; padding:10px; color:var(--text); resize:vertical; }
+    #forum-comment-form button{ background: linear-gradient(90deg, var(--accent), var(--accent-2)); border:none; color:#0e0e14;
+      font-weight:700; border-radius:10px; padding:10px 15px; cursor:pointer; transition: opacity .2s; }
+    #forum-comment-form button:hover{ opacity:.9; }
   </style>
 </head>
 <body>
 
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg sticky-top">
-    <div class="container">
-      <button class="btn btn-outline-light me-2 d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar" aria-controls="mobileSidebar">☰</button>
-      <a class="navbar-brand brand-text" href="#">GameHub</a>
-      <div class="ms-auto text-secondary small">Signed in as <strong><?php echo $username; ?></strong></div>
-    </div>
-  </nav>
-
-  <!-- Hero -->
-  <header class="hero py-4">
-    <div class="container">
-      <div class="row align-items-center g-3">
-        <div class="col-lg-8">
-          <h1 class="h3 mb-1">Discover & track your next game</h1>
-          <p class="mb-0 text-secondary">Use the sidebar to browse Library sections, or search by name.</p>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <!-- Mobile Offcanvas Sidebar -->
-  <div class="offcanvas offcanvas-start" tabindex="-1" id="mobileSidebar" aria-labelledby="mobileSidebarLabel">
-    <div class="offcanvas-header">
-      <h5 id="mobileSidebarLabel" class="mb-0">Menu</h5>
-      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-    </div>
-    <div class="offcanvas-body">
-      <nav id="sidebarMobileNav">
-        <div class="section-title">Browse</div>
-        <a href="#" class="side-link active" data-view="recent">🏠 Home / Recent</a>
-        <a href="#" class="side-link" data-view="search">🔎 Search</a>
-        <div class="section-title mt-3">Library</div>
-        <a href="#" class="side-link" data-view="liked">❤️ Liked</a>
-        <a href="#" class="side-link" data-view="played">✅ Played</a>
-        <a href="#" class="side-link" data-view="wishlist">📝 Wishlist</a>
-        <a href="#" class="side-link" data-view="forums">💬 Forums</a>
-        <a href="#" class="side-link" data-view="recommendations">✨ Recommendations</a>
-      </nav>
+<nav class="navbar navbar-dark sticky-top">
+  <div class="container">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="home.php">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+        <path d="M4 12l4-8 4 8-4 8-4-8Zm8 0 4-8 4 8-4 8-4-8Z" stroke="url(#g)" stroke-width="1.5"/>
+        <defs><linearGradient id="g" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#7c4dff"/><stop offset="1" stop-color="#00ffc6"/></linearGradient></defs>
+      </svg>
+      <span class="brand-text">GameHub</span>
+    </a>
+    <div class="d-flex align-items-center gap-3">
+      <span class="text-secondary small d-none d-md-inline">Signed in as</span>
+      <span class="fw-bold"><?php echo $username; ?></span>
+      <a class="btn btn-sm btn-outline-light" href="logout.php">Logout</a>
     </div>
   </div>
+</nav>
 
-  <main class="container my-4">
-    <div class="row g-4">
-      <!-- Desktop Sidebar -->
-      <div class="col-lg-3 d-none d-lg-block">
-        <aside class="sidebar">
-          <nav id="sidebarNav">
-            <div class="section-title">Browse</div>
-            <a href="#" class="side-link active" data-view="recent">🏠 Home / Recent</a>
-            <a href="#" class="side-link" data-view="search">🔎 Search</a>
-            <div class="section-title mt-3">Library</div>
-            <a href="#" class="side-link" data-view="liked">❤️ Liked</a>
-            <a href="#" class="side-link" data-view="played">✅ Played</a>
-            <a href="#" class="side-link" data-view="wishlist">📝 Wishlist</a>
-            <a href="#" class="side-link" data-view="forums">💬 Forums</a>
-            <a href="#" class="side-link" data-view="recommendations">✨ Recommendations</a>
-          </nav>
-        </aside>
+<div class="container-fluid">
+  <aside class="sidebar">
+    <ul class="list-unstyled sidebar-nav">
+      <li><a href="#" data-target="home-content" class="active"><i class="bi bi-house-door me-2"></i>Home</a></li>
+      <li><a href="#" data-target="reviews-content"><i class="bi bi-star me-2"></i>Reviews</a></li>
+      <li><a href="#" data-target="mygames-content"><i class="bi bi-controller me-2"></i>My Games</a></li>
+    </ul>
+    <div class="p-3 mt-4 text-secondary text-uppercase small fw-bold">Features</div>
+    <ul class="list-unstyled sidebar-nav">
+      <li><a href="#" data-target="wishlist-content"><i class="bi bi-heart me-2"></i>Wishlist</a></li>
+      <li><a href="#" data-target="forum-content"><i class="bi bi-chat-dots me-2"></i>Forum</a></li>
+      <li><a href="#" data-target="recommendations-content"><i class="bi bi-lightbulb me-2"></i>Recommendations</a></li>
+      <li><a href="#" data-target="notifications-content"><i class="bi bi-bell me-2"></i>Notifications</a></li>
+    </ul>
+  </aside>
+</div>
+
+<main class="main-content">
+  <!-- Home -->
+  <section id="home-content" class="content-display active-section">
+    <section class="hero py-5 text-center">
+      <div class="container">
+        <h1 class="display-5 fw-bold mb-2">Find your next adventure</h1>
+        <p class="lead text-secondary mb-0">Search the library and explore what everyone’s playing.</p>
       </div>
+    </section>
 
-      <!-- Main Content Area -->
-      <div class="col-lg-9">
-        <!-- Search Toolbar (visible on "recent" and "search" views) -->
-        <div id="searchToolbar" class="search-wrap mb-3">
-          <div class="row g-2">
-            <div class="col-12 col-xl-8">
-              <input id="q" type="text" class="form-control form-control-lg" placeholder="Search games (e.g., Elden Ring)">
-            </div>
-            <div class="col-6 col-xl-2 d-grid">
-              <button id="searchBtn" class="btn btn-dark btn-lg">Search</button>
-            </div>
-            <div class="col-6 col-xl-2 d-grid">
-              <button id="clearBtn" class="btn btn-outline-light btn-lg">Clear</button>
-            </div>
+    <div class="container my-4">
+      <div class="search-wrap mb-4">
+        <div class="row g-2">
+          <div class="col-12 col-lg-9">
+            <input id="q" type="text" class="form-control form-control-lg" placeholder="Search games (e.g., Elden Ring, Hades, GTA V)">
+          </div>
+          <div class="col-12 col-lg-3 d-grid">
+            <button id="searchBtn" class="btn btn-dark btn-lg">Search</button>
           </div>
         </div>
-
-        <!-- RECENT/SEARCH VIEW -->
-        <section id="view-recent">
-          <div id="status" class="alert d-none" role="alert">Loading…</div>
-          <div id="results" class="row g-4"></div>
-          <nav class="mt-4">
-            <ul id="pager" class="pagination justify-content-center"></ul>
-          </nav>
-        </section>
-
-        <!-- LIKED VIEW -->
-        <section id="view-liked" class="d-none">
-          <h2 class="h5 mb-3">❤️ Liked</h2>
-          <div id="likedResults" class="row g-4"></div>
-        </section>
-
-        <!-- PLAYED VIEW -->
-        <section id="view-played" class="d-none">
-          <h2 class="h5 mb-3">✅ Played</h2>
-          <div id="playedResults" class="row g-4"></div>
-        </section>
-
-        <!-- WISHLIST VIEW -->
-        <section id="view-wishlist" class="d-none">
-          <h2 class="h5 mb-3">📝 Wishlist</h2>
-          <div id="wishlistResults" class="row g-4"></div>
-          <div class="alert mt-2">No wishlist items yet.</div>
-        </section>
-
-        <!-- FORUMS VIEW -->
-        <section id="view-forums" class="d-none">
-          <h2 class="h5 mb-3">💬 Forums</h2>
-          <div class="alert">Forums coming soon.</div>
-        </section>
-
-        <!-- RECOMMENDATIONS VIEW -->
-        <section id="view-recommendations" class="d-none">
-          <h2 class="h5 mb-3">✨ Recommendations</h2>
-          <div id="recoResults" class="row g-4"></div>
-          <div class="alert mt-2">Recommendations coming soon.</div>
-        </section>
+      </div>
+      <div id="status" class="alert d-none">Loading…</div>
+      <div id="results" class="row g-4"></div>
+      <div class="mt-4 text-center">
+        <button id="loadMoreBtn" class="btn btn-dark btn-lg d-none">Load more</button>
       </div>
     </div>
-  </main>
+  </section>
 
-  <footer class="container mt-5">
-    <p class="footer-fade small mb-0">© <?php echo date('Y'); ?> GameHub</p>
-  </footer>
+  <!-- Reviews -->
+  <section id="reviews-content" class="content-display">
+    <div class="container my-4">
+      <h2>Reviews</h2>
+      <p class="lead text-secondary">Your latest reviews here.</p>
+    </div>
+  </section>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-  (function(){
-    // Elements
-    const results        = document.getElementById('results');
-    const pager          = document.getElementById('pager');
-    const statusEl       = document.getElementById('status');
-    const qInput         = document.getElementById('q');
-    const searchBtn      = document.getElementById('searchBtn');
-    const clearBtn       = document.getElementById('clearBtn');
-    const searchToolbar  = document.getElementById('searchToolbar');
+  <!-- My Games -->
+  <section id="mygames-content" class="content-display">
+    <div class="container my-4">
+      <h2>My Games</h2>
+      <p class="lead text-secondary">Your played or liked games will appear here.</p>
+    </div>
+  </section>
 
-    // Views
-    const VIEWS = {
-      recent: document.getElementById('view-recent'),
-      liked: document.getElementById('view-liked'),
-      played: document.getElementById('view-played'),
-      wishlist: document.getElementById('view-wishlist'),
-      forums: document.getElementById('view-forums'),
-      recommendations: document.getElementById('view-recommendations'),
-      search: document.getElementById('view-recent') // search uses the same section as recent
-    };
+  <!-- Wishlist -->
+  <section id="wishlist-content" class="content-display">
+    <div class="container my-4">
+      <h2>Wishlist</h2>
+      <p class="lead text-secondary">Games you want to play.</p>
+    </div>
+  </section>
 
-    const likedResults   = document.getElementById('likedResults');
-    const playedResults  = document.getElementById('playedResults');
-    const wishlistResults= document.getElementById('wishlistResults');
-    const recoResults    = document.getElementById('recoResults');
+  <!-- Forum -->
+  <section id="forum-content" class="content-display">
+    <div class="container my-4">
+      <h2 class="mb-4">Message Forum</h2>
 
-    // Sidebars
-    const sideDesktop = document.getElementById('sidebarNav');
-    const sideMobile  = document.getElementById('sidebarMobileNav');
-    const mobileCanvas= document.getElementById('mobileSidebar');
+      <div class="comment-section">
+        <div class="comment-header" id="forum-comment-header">
+          <h3 class="mb-0">Message Board</h3>
+          <span class="text-secondary small">click to toggle</span>
+        </div>
+        <div id="forum-comment-container">
+          <ul id="forum-comment-list"></ul>
+          <form id="forum-comment-form">
+            <textarea id="forum-comment-text" placeholder="Write a message..."></textarea>
+            <button type="submit">Post</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    // State
-    let page = 1;
-    const pageSize = 9;
-    let currentScope = 'recent'; // for fetch logic
-    let currentView  = 'recent'; // for view toggling
+  <!-- Recommendations -->
+  <section id="recommendations-content" class="content-display">
+    <div class="container my-4">
+      <h2>Recommendations</h2>
+      <p class="lead text-secondary">Personalized game suggestions.</p>
+    </div>
+  </section>
 
-    // ----- Helpers: Status -----
-    function setStatus(text, type){
-      statusEl.className = 'alert';
-      statusEl.classList.add(type ? ('alert-' + type) : 'alert-info');
-      statusEl.innerHTML = text;
-      statusEl.classList.remove('d-none');
+  <!-- Notifications -->
+  <section id="notifications-content" class="content-display">
+    <div class="container my-4">
+      <h2>Notifications</h2>
+      <p class="lead text-secondary">All your recent activity and alerts.</p>
+    </div>
+  </section>
+</main>
+
+<!-- Game Details Modal -->
+<div class="modal fade" id="gameDetailsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content" style="background:#12121b;color:#e8e8ff;border:1px solid rgba(124,77,255,.25)">
+      <div class="modal-header">
+        <h5 class="modal-title" id="gdmTitle">Game Details</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="gdmBody">Loading…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="text-center py-3 mt-4 fixed-bottom">
+  <div class="container">
+    <small>&copy; 2025 GameHub • All Rights Reserved</small>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+// Search + Recent feed with "Load more" pagination and Details modal
+(function(){
+  const results = document.getElementById('results');
+  const status  = document.getElementById('status');
+  const qInput  = document.getElementById('q');
+  const btn     = document.getElementById('searchBtn');
+  const loadMoreBtn = document.getElementById('loadMoreBtn');
+
+  let page = 1;
+  const pageSize = 9;
+  let totalPages = 1;
+  let currentScope = 'recent';
+
+  function setStatus(text, type) {
+    status.className = 'alert';
+    status.classList.add(type ? `alert-${type}` : 'alert-info');
+    status.innerHTML = text;
+    status.classList.remove('d-none');
+  }
+  function clearStatus(){ status.classList.add('d-none'); }
+
+  function triggerScopeAndFetch(resetToFirst = true){
+    const q = qInput.value.trim();
+    currentScope = (q === '') ? 'recent' : 'search';
+    if (resetToFirst) page = 1;
+    fetchGames(currentScope, { append: false });
+  }
+
+  function fetchGames(scope, { append = false } = {}){
+    if (scope) currentScope = scope;
+
+    if (!append) {
+      setStatus('Loading games…', null);
+      results.innerHTML = '';
     }
-    function clearStatus(){ statusEl.classList.add('d-none'); }
+    loadMoreBtn.classList.add('d-none');
 
-    // ----- Helpers: Show/Hide Views -----
-    function setActiveSideLinks(view){
-      const mark = (root)=>{
-        root?.querySelectorAll('.side-link').forEach(a=>{
-          a.classList.toggle('active', a.dataset.view === view);
-        });
-      };
-      mark(sideDesktop);
-      mark(sideMobile);
-    }
-
-    function showView(view){
-      currentView = view;
-      // Hide all
-      Object.entries(VIEWS).forEach(([k, el])=>{
-        if (!el) return;
-        if (k === view) el.classList.remove('d-none');
-        else el.classList.add('d-none');
-      });
-
-      // Search toolbar only for recent/search
-      const toolbarVisible = (view === 'recent' || view === 'search');
-      searchToolbar.classList.toggle('d-none', !toolbarVisible);
-
-      setActiveSideLinks(view);
-
-      // Load content per-view without changing backend logic
-      if (view === 'recent'){
-        page = 1;
-        fetchGames('recent');
-      } else if (view === 'search'){
-        triggerSearchScope(); // respects empty vs filled query
-      } else if (view === 'liked'){
-        renderLibrary('liked');
-      } else if (view === 'played'){
-        renderLibrary('played');
-      } else if (view === 'wishlist'){
-        renderLibrary('wishlist'); // placeholder
-      } else if (view === 'recommendations'){
-        renderLibrary('recommendations'); // placeholder
-      } // forums is static placeholder
-    }
-
-    // ----- Local Library Store (no backend change) -----
-    const LS_KEYS = {
-      liked: 'gh_liked_games',
-      played: 'gh_played_games',
-      wishlist: 'gh_wishlist_games'
-    };
-
-    function loadStore(key){
-      try { return JSON.parse(localStorage.getItem(LS_KEYS[key]) || '[]'); }
-      catch { return []; }
-    }
-    function saveStore(key, arr){
-      try { localStorage.setItem(LS_KEYS[key], JSON.stringify(arr)); } catch {}
-    }
-    function inStore(arr, id){ return arr.findIndex(x => String(x.id) === String(id)) !== -1; }
-
-    function pickGameFields(g){
-      // keep it light for library rendering
-      const toName = (x)=> (typeof x === 'string' ? x : (x?.name ?? ''));
-      return {
-        id: g.id ?? '',
-        name: g.name || 'Untitled',
-        image: g.background_image || g.image || '',
-        rating: (g.rating != null) ? Number(g.rating).toFixed(1) : null,
-        released: g.released || null,
-        platforms: (g.platforms || []).slice(0,4).map(toName),
-        genres: (g.genres || []).slice(0,3).map(toName)
-      };
-    }
-
-    function toggleLibraryEntry(kind, game, turnOn){
-      const arr = loadStore(kind);
-      const idx = arr.findIndex(x => String(x.id) === String(game.id));
-      if (turnOn){
-        if (idx === -1) { arr.push(pickGameFields(game)); saveStore(kind, arr); }
-      } else {
-        if (idx !== -1) { arr.splice(idx,1); saveStore(kind, arr); }
-      }
-      // If user is viewing that library right now, re-render it
-      if (currentView === kind) renderLibrary(kind);
+    const q = qInput.value.trim();
+    const body = new URLSearchParams();
+    body.append('page', String(page));
+    body.append('pageSize', String(pageSize));
+    if (currentScope === 'search' && q) {
+      body.append('scope','search');
+      body.append('query', q);
+    } else {
+      body.append('scope','recent');
     }
 
-    function renderLibrary(kind){
-      const data = loadStore(kind);
-      const container = (kind === 'liked') ? likedResults :
-                        (kind === 'played') ? playedResults :
-                        (kind === 'wishlist') ? wishlistResults :
-                        (kind === 'recommendations') ? recoResults : null;
-      if (!container) return;
-      if (!data.length){
-        container.innerHTML = `<div class="col-12"><div class="alert">No ${kind} items yet.</div></div>`;
+    fetch('games.php', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: body.toString()
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data || data.success === false) {
+        setStatus(data?.message || 'Failed to load games', 'danger');
         return;
       }
-      const cards = data.map(g=>{
-        const released = g.released ? new Date(g.released).toLocaleDateString() : 'TBA';
-        const platforms = (g.platforms || []).map(p=>`<span class="badge badge-chip me-1 mb-1">${p}</span>`).join('');
-        const genres    = (g.genres || []).map(p=>`<span class="badge badge-chip me-1 mb-1">${p}</span>`).join('');
-        return `
+      clearStatus();
+
+      totalPages = Number(data.totalPages || 1);
+      renderGames(data.items || [], { append });
+
+      const canLoadMore = (currentScope === 'recent') && (page < totalPages);
+      loadMoreBtn.classList.toggle('d-none', !canLoadMore);
+    })
+    .catch(err => {
+      console.error(err);
+      setStatus('Network error loading games', 'danger');
+    });
+  }
+
+  function renderGames(items, { append = false } = {}){
+    if (!items.length && !append) {
+      results.innerHTML = '<div class="col-12"><div class="alert">No games found.</div></div>';
+      return;
+    }
+    const toName = (x)=> (typeof x === 'string' ? x : (x?.name ?? ''));
+    const cards = items.map(g => {
+      const id   = g.id ?? g.rawg_id ?? '';
+      const img  = g.background_image || g.image || '';
+      const name = g.name || 'Untitled';
+      const rating = (g.rating != null) ? Number(g.rating).toFixed(1) : null;
+      const released = g.released ? new Date(g.released).toLocaleDateString() : 'Unknown';
+      const platforms = (g.platforms || []).slice(0,4).map(p => `<span class="badge badge-chip me-1 mb-1">${toName(p)}</span>`).join('');
+      const genres = (g.genres || []).slice(0,3).map(p => `<span class="badge badge-chip me-1 mb-1">${toName(p)}</span>`).join('');
+
+      return `
         <div class="col-12 col-sm-6 col-lg-4">
           <div class="game-card h-100">
-            ${g.image ? `<img src="${g.image}" class="game-img w-100" alt="${g.name}">` : ''}
-            <div class="p-3 d-flex flex-column h-100">
+            ${img ? `<img src="${img}" class="game-img w-100" alt="${name}">` : ''}
+            <div class="p-3">
               <div class="d-flex justify-content-between align-items-start mb-1">
-                <h5 class="mb-0">${g.name}</h5>
-                ${g.rating ? `<span class="badge rating-badge ms-2">${g.rating}</span>` : ''}
+                <h5 class="mb-0">${name}</h5>
+                ${rating !== null ? `<span class="badge rating-badge ms-2">${rating}</span>` : ''}
               </div>
-              <div class="text-secondary small mb-2">Release: ${released}</div>
+              <div class="text-secondary small mb-2">Released: ${released}</div>
               ${platforms ? `<div class="mb-2">${platforms}</div>` : ''}
-              ${genres ? `<div class="mb-3">${genres}</div>` : ''}
+              ${genres ? `<div class="mb-2">${genres}</div>` : ''}
+              <a href="#" class="btn btn-sm btn-light" data-action="details" data-id="${id}">Details</a>
             </div>
           </div>
         </div>`;
-      }).join('');
-      container.innerHTML = cards;
+    }).join('');
+
+    if (append) {
+      const temp = document.createElement('div');
+      temp.innerHTML = cards;
+      [...temp.children].forEach(c => results.appendChild(c));
+    } else {
+      results.innerHTML = cards;
     }
 
-    // ----- Fetch logic (unchanged scopes: recent/search) -----
-    function fetchGames(scope){
-      if (scope) currentScope = scope;
+    // bind Details buttons
+    results.querySelectorAll('[data-action="details"]').forEach(el=>{
+      el.onclick = (e)=>{
+        e.preventDefault();
+        const id = parseInt(el.dataset.id || '0', 10);
+        if (!id) return;
+        openDetails(id);
+      };
+    });
+  }
 
-      setStatus('Loading games…');
-      results.innerHTML = '';
-      pager.innerHTML = '';
+  // --- FIXED: explicit ./game.php URL + robust error surfacing ---
+  window.openDetails = function(id){
+    const detailsModalEl = document.getElementById('gameDetailsModal');
+    const detailsTitleEl = document.getElementById('gdmTitle');
+    const detailsBodyEl  = document.getElementById('gdmBody');
+    const detailsModal = detailsModalEl ? new bootstrap.Modal(detailsModalEl) : null;
+    if (!detailsModal) return;
 
-      const q = qInput.value.trim();
-      const body = new URLSearchParams();
-      body.append('page', String(page));
-      body.append('pageSize', String(pageSize));
+    detailsTitleEl.textContent = 'Game Details';
+    detailsBodyEl.innerHTML = 'Loading…';
+    detailsModal.show();
 
-      if (currentScope === 'search' && q){
-        body.append('scope','search');
-        body.append('query', q);
-      } else {
-        body.append('scope','recent');
-      }
+    const body = new URLSearchParams();
+    body.append('id', String(id));
 
-      fetch('games.php', {
-        method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body: body.toString()
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (!data || data.success === false){
-          setStatus(data?.message || 'Failed to load games', 'danger');
-          return;
-        }
-        clearStatus();
-        renderGames(data.items || []);
-        renderPager(data.page || 1, data.totalPages || 1);
-      })
-      .catch(err => {
-        console.error(err);
-        setStatus('Network error loading games', 'danger');
-      });
-    }
-
-    // Only render buttons when display === true
-    function shouldShow(flag){ return flag === true; }
-
-    function renderGames(items){
-      if (!items.length){
-        results.innerHTML = '<div class="col-12"><div class="alert">No games found.</div></div>';
+    fetch('./game.php', {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: body.toString()
+    })
+    .then(async (r) => {
+      const text = await r.text();
+      try { return { ok: r.ok, json: JSON.parse(text), text }; }
+      catch { return { ok: r.ok, json: null, text }; }
+    })
+    .then(({ok, json, text})=>{
+      if (!ok) {
+        console.error('game.php HTTP error:', text);
+        detailsBodyEl.innerHTML = `<div class="alert alert-danger">Endpoint error.<br><pre style="white-space:pre-wrap">${text}</pre></div>`;
         return;
       }
-      const toName = (x)=> (typeof x === 'string' ? x : (x?.name ?? ''));
-      const cards = items.map(g=>{
-        const img = g.background_image || g.image || '';
-        const name = g.name || 'Untitled';
-        const rating = (g.rating != null) ? Number(g.rating).toFixed(1) : null;
-        const released = g.released ? new Date(g.released).toLocaleDateString() : 'TBA';
-        const platforms = (g.platforms || []).slice(0,4).map(p => `<span class="badge badge-chip me-1 mb-1">${toName(p)}</span>`).join('');
-        const genres    = (g.genres || []).slice(0,3).map(ge => `<span class="badge badge-chip me-1 mb-1">${toName(ge)}</span>`).join('');
+      if (!json || json.success === false) {
+        const msg = json?.message || 'Unknown error';
+        console.error('game.php app error:', msg, 'raw:', text);
+        detailsBodyEl.innerHTML = `<div class="alert alert-danger">Failed to load details: ${msg}</div>`;
+        return;
+      }
+      const g = (typeof json.item === 'string') ? JSON.parse(json.item) : (json.item || {});
+      if (!g || !g.rawg_id) {
+        detailsBodyEl.innerHTML = `<div class="alert alert-warning">No details found for this game.</div>`;
+        return;
+      }
 
-        const likeVisible    = shouldShow(g?.buttons?.like?.display);
-        const playedVisible  = shouldShow(g?.buttons?.played?.display);
-        const detailsVisible = shouldShow(g?.buttons?.details?.display);
+      const pill = (arr)=> (arr && arr.length)
+        ? `<div class="mb-2">${arr.map(x=>`<span class="badge badge-chip me-1 mb-1">${x}</span>`).join('')}</div>`
+        : '';
 
-        const likeBtn   = likeVisible   ? `<button class="btn btn-sm btn-outline-light" data-action="like" data-id="${g.id ?? ''}">Like</button>` : '';
-        const playedBtn = playedVisible ? `<button class="btn btn-sm btn-outline-light" data-action="played" data-id="${g.id ?? ''}">Played</button>` : '';
-        const detailsBtn= detailsVisible? `<a class="btn btn-sm btn-light" data-action="details" data-id="${g.id ?? ''}" href="#">Details</a>` : '';
+      const hero = g.background_image_additional || g.background_image || '';
+      const infoRows = [
+        ['Released', g.released || 'Unknown'],
+        ['Rating', (g.rating!=null ? Number(g.rating).toFixed(1) : '—')],
+        ['Metacritic', (g.metacritic!=null ? g.metacritic : '—')],
+        ['Playtime', (g.playtime!=null ? g.playtime+'h' : '—')],
+        ['ESRB', g.esrb_rating || '—'],
+        ['Website', g.website ? `<a href="${g.website}" target="_blank" rel="noopener">Visit</a>` : '—'],
+        ['Reddit', g.reddit_url ? `<a href="${g.reddit_url}" target="_blank" rel="noopener">Community</a>` : '—'],
+      ].map(([k,v])=>`<div class="d-flex justify-content-between border-bottom border-1 border-opacity-25 py-2"><div class="text-secondary">${k}</div><div>${v}</div></div>`).join('');
 
-        // Custom data attribute to reconstruct for library
-        const gdata = encodeURIComponent(JSON.stringify({
-          id: g.id ?? '',
-          name, image: img, rating, released: g.released || null,
-          platforms: (g.platforms || []).map(toName),
-          genres: (g.genres || []).map(toName)
-        }));
+      const shots = (g.screenshots||[]).slice(0,6).map(u=>`
+        <div class="col-6 col-md-4 mb-3">
+          <img src="${u}" class="w-100 rounded-3" style="border:1px solid rgba(124,77,255,.25)" alt="">
+        </div>`).join('');
 
-        return `
-          <div class="col-12 col-sm-6 col-lg-4">
-            <div class="game-card h-100" data-game="${gdata}">
-              ${img ? `<img src="${img}" class="game-img w-100" alt="${name}">` : ''}
-              <div class="p-3 d-flex flex-column h-100">
-                <div class="d-flex justify-content-between align-items-start mb-1">
-                  <h5 class="mb-0">${name}</h5>
-                  ${rating !== null ? `<span class="badge rating-badge ms-2">${rating}</span>` : ''}
-                </div>
-                <div class="text-secondary small mb-2">Release: ${released}</div>
-                ${platforms ? `<div class="mb-2">${platforms}</div>` : ''}
-                ${genres ? `<div class="mb-3">${genres}</div>` : ''}
-                <div class="mt-auto d-flex gap-2 flex-wrap card-actions">
-                  ${likeBtn}
-                  ${playedBtn}
-                  ${detailsBtn || `<a class="btn btn-sm btn-outline-light disabled" tabindex="-1" aria-disabled="true">Details</a>`}
-                </div>
-              </div>
-            </div>
+      const desc = (g.description || g.description_raw || '').trim();
+      const descHtml = g.description ? g.description : (desc ? `<p>${desc.replace(/\n/g,'<br>')}</p>` : '<p>No description available.</p>');
+
+      document.getElementById('gdmTitle').textContent = g.name || 'Game Details';
+      document.getElementById('gdmBody').innerHTML = `
+        ${hero ? `<img src="${hero}" class="w-100 mb-3 rounded-3" style="border:1px solid rgba(124,77,255,.25)" alt="">` : ''}
+
+        ${pill(g.platforms)}
+        ${pill(g.genres)}
+        ${pill(g.tags)}
+        ${pill(g.stores)}
+        ${pill(g.developers)}
+        ${pill(g.publishers)}
+
+        <div class="row g-3">
+          <div class="col-lg-8">
+            <h6 class="mb-2">About</h6>
+            <div class="mb-3" style="line-height:1.6">${descHtml}</div>
+            ${shots ? `<h6 class="mb-2">Screenshots</h6><div class="row">${shots}</div>` : ''}
           </div>
-        `;
-      }).join('');
-      results.innerHTML = cards;
+          <div class="col-lg-4">
+            <h6 class="mb-2">Info</h6>
+            ${infoRows}
+          </div>
+        </div>
+      `;
+    })
+    .catch(err=>{
+      console.error('fetch game.php failed:', err);
+      document.getElementById('gdmBody').innerHTML = `<div class="alert alert-danger">Network error.</div>`;
+    });
+  }
 
-      // UI handlers
-      results.querySelectorAll('[data-action]').forEach(el=>{
-        el.addEventListener('click', (e)=>{
-          const action = el.dataset.action;
-          const card = el.closest('.game-card');
-          const raw = card?.getAttribute('data-game');
-          let g = null;
-          try { g = raw ? JSON.parse(decodeURIComponent(raw)) : null; } catch {}
-          if (action === 'details'){
-            e.preventDefault();
-            setStatus('Details view is not implemented on this page.', 'info');
-            setTimeout(clearStatus, 1200);
-            return;
-          }
-          if ((action === 'like' || action === 'played') && g){
-            const makeOn = !el.classList.contains('btn-light'); // toggling to ON if currently outline
-            el.classList.toggle('btn-light', makeOn);
-            el.classList.toggle('btn-outline-light', !makeOn);
-            toggleLibraryEntry(action, g, makeOn);
-          }
-          el.blur();
-        });
-      });
-    }
+  // Events
+  btn.addEventListener('click', e => { e.preventDefault(); triggerScopeAndFetch(true); });
+  qInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); triggerScopeAndFetch(true); } });
+  loadMoreBtn.addEventListener('click', () => {
+    if (page < totalPages) { page += 1; fetchGames(currentScope, { append: true }); }
+  });
 
-    function renderPager(current, total){
-      if (total <= 1){ pager.innerHTML = ''; return; }
-      let html = '';
-      const item = (p, label=p, disabled=false, active=false)=>`
-        <li class="page-item ${disabled?'disabled':''} ${active?'active':''}">
-          <a class="page-link" href="#" data-page="${p}">${label}</a>
-        </li>`;
-      html += item(current - 1, '&laquo;', current <= 1, false);
+  // Initial load
+  triggerScopeAndFetch(true);
 
-      const windowSize = 5;
-      let start = Math.max(1, current - Math.floor(windowSize/2));
-      let end   = Math.min(total, start + windowSize - 1);
-      if (end - start + 1 < windowSize) start = Math.max(1, end - windowSize + 1);
+  // Expose for sidebar when returning to Home tab
+  window.fetchGames = () => triggerScopeAndFetch(false);
+})();
+</script>
 
-      for (let p = start; p <= end; p++) html += item(p, p, false, p === current);
-      html += item(current + 1, '&raquo;', current >= total, false);
+<script>
+// sidebar functionality
+document.addEventListener('DOMContentLoaded', () => {
+  const links = document.querySelectorAll('.sidebar-nav a');
+  const sections = document.querySelectorAll('.content-display');
+  const homeSectionId = 'home-content';
+  const fetchGames = window.fetchGames;
 
-      pager.innerHTML = html;
-      pager.querySelectorAll('a.page-link').forEach(a=>{
-        a.addEventListener('click', (e)=>{
-          e.preventDefault();
-          const p = parseInt(a.dataset.page, 10);
-          if (!isNaN(p) && p !== page){ page = p; fetchGames(currentScope); }
-        });
-      });
-    }
+  function showSection(targetId) {
+    sections.forEach(sec => sec.classList.remove('active-section'));
+    links.forEach(link => link.classList.remove('active'));
 
-    // ----- Search triggers -----
-    function triggerSearchScope(){
-      page = 1;
-      const q = qInput.value.trim();
-      currentScope = (q === '') ? 'recent' : 'search';
-      fetchGames(currentScope);
-    }
-    searchBtn.addEventListener('click', triggerSearchScope);
-    qInput.addEventListener('keydown', (e)=>{ if (e.key === 'Enter'){ e.preventDefault(); triggerSearchScope(); }});
-    clearBtn.addEventListener('click', ()=>{ qInput.value=''; page=1; showView('recent'); });
+    const targetSection = document.getElementById(targetId);
+    const activeLink = document.querySelector(`.sidebar-nav a[data-target="${targetId}"]`);
 
-    // ----- Sidebar interactions -----
-    function handleSideClick(root){
-      root?.addEventListener('click', (e)=>{
-        const link = e.target.closest('.side-link'); if (!link) return;
-        e.preventDefault();
-        const view = link.dataset.view;
-        if (!view) return;
-        if (view === 'recent'){ qInput.value=''; }
-        showView(view);
-        // close mobile offcanvas if open
-        if (root === sideMobile){
-          const off = bootstrap.Offcanvas.getOrCreateInstance(mobileCanvas);
-          off.hide();
-        }
-      });
-    }
-    handleSideClick(sideDesktop);
-    handleSideClick(sideMobile);
+    if (targetSection) targetSection.classList.add('active-section');
+    if (activeLink) activeLink.classList.add('active');
 
-    // Init
-    setActiveSideLinks('recent');
-    showView('recent');
-  })();
-  </script>
+    localStorage.setItem('activeSection', targetId);
+    if (targetId === homeSectionId && typeof fetchGames === 'function') fetchGames();
+  }
+
+  links.forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const targetId = link.dataset.target;
+      if (targetId) showSection(targetId);
+    });
+  });
+
+  const saved = localStorage.getItem('activeSection');
+  if (saved && document.getElementById(saved)) showSection(saved);
+  else showSection(homeSectionId);
+});
+</script>
+
+<script>
+// forum comments (local only)
+document.addEventListener('DOMContentLoaded', () => {
+  const header = document.getElementById('forum-comment-header');
+  const container = document.getElementById('forum-comment-container');
+  const form = document.getElementById('forum-comment-form');
+  const list = document.getElementById('forum-comment-list');
+  const text = document.getElementById('forum-comment-text');
+  const currentUser = "<?php echo $username; ?>";
+  const LS_KEY = `forumComments_${currentUser}`;
+
+  function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function loadComments() { try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { return []; } }
+  function saveComments(arr) { localStorage.setItem(LS_KEY, JSON.stringify(arr)); }
+
+  let comments = loadComments();
+  function render() {
+    if (!list) return;
+    list.innerHTML = comments.map(c => `
+      <li class="forum-comment">
+        <div class="meta"><strong>${escapeHtml(c.user)}</strong><small>${escapeHtml(c.time)}</small></div>
+        <div>${escapeHtml(c.text)}</div>
+      </li>`).join('');
+  }
+
+  header?.addEventListener('click', () => { container.classList.toggle('is-expanded'); });
+  form?.addEventListener('submit', e => {
+    e.preventDefault();
+    const val = (text?.value || '').trim(); if (!val) return;
+    const now = new Date();
+    const ts = now.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+    comments.push({ user: currentUser, time: ts, text: val });
+    saveComments(comments); render(); text.value = '';
+  });
+  render();
+});
+</script>
 </body>
 </html>
