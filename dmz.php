@@ -73,6 +73,8 @@ function mapRawgItem(array $g): array {
     }
   }
   return [
+    // Add a plain "id" because the web UI expects g.id
+    'id'               => $g['id'] ?? null,
     'rawg_id'          => $g['id'] ?? null,
     'name'             => $g['name'] ?? '',
     'released'         => $g['released'] ?? null,
@@ -82,6 +84,7 @@ function mapRawgItem(array $g): array {
     'genres'           => $genres,
   ];
 }
+
 
 /** RAWG fetch (supports query, dates, ordering, page/pageSize) */
 function doFetchGames(
@@ -164,4 +167,3 @@ $server = new rabbitMQServer('testRabbitMQ.ini', 'dmzServer');
 echo "dmzFetcher BEGIN\n";
 $server->process_requests('requestProcessor');
 echo "dmzFetcher END\n";
-?>
