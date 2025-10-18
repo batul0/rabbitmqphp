@@ -37,20 +37,37 @@ try {
     body {
       background: radial-gradient(1200px 600px at 15% 0%, #18182a 0%, var(--bg1) 60%) fixed,
                   linear-gradient(180deg, var(--bg1), var(--bg2)) fixed;
-      color: var(--text); min-height: 100vh; padding-bottom: 80px;
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 24px;
     }
     .container-fluid { display: flex; padding: 0; }
     .sidebar {
-      width: var(--sidebar-width); background-color: var(--bg2); position: fixed; height: 100vh;
-      padding-top: 60px; overflow-y: auto; border-right: 1px solid rgba(124,77,255,0.25);
+      width: var(--sidebar-width);
+      background-color: var(--bg2);
+      position: fixed;
+      height: 100vh;
+      padding-top: 60px;
+      overflow-y: auto;
+      border-right: 1px solid rgba(124,77,255,0.25);
     }
-    .sidebar-nav a {
-      display: block; color: var(--muted); text-decoration: none; padding: 12px 16px; margin-bottom: 4px;
+    .sidebar-nav a, .sidebar-nav button {
+      display: block; width: 100%; text-align: left;
+      color: var(--muted); text-decoration: none; padding: 12px 16px; margin-bottom: 4px;
       border-radius: 8px; transition: background-color .2s, color .2s;
+      background: transparent; border: none;
     }
-    .sidebar-nav a:hover { background-color: var(--chip); color: var(--text); }
-    .sidebar-nav a.active { background-color: var(--chip); color: var(--text);
-      border-left: 3px solid var(--accent-2); font-weight: 600; }
+    .sidebar-nav a:hover, .sidebar-nav button:hover { background-color: var(--chip); color: var(--text); }
+    .sidebar-nav a.active {
+      background-color: var(--chip); color: var(--text);
+      border-left: 3px solid var(--accent-2); font-weight: 600;
+    }
+    .submenu {
+      margin: 4px 0 8px 8px; padding-left: 8px; border-left: 2px solid rgba(124,77,255,0.2);
+    }
+    .submenu a { padding: 10px 12px; margin-bottom: 4px; }
+    .submenu a.active { border-left: 3px solid var(--accent-2); }
+
     .main-content { margin-left: var(--sidebar-width); flex: 1; }
     .navbar {
       background: rgba(16,16,26,0.9); backdrop-filter: blur(8px);
@@ -60,54 +77,42 @@ try {
       font-weight: 800; letter-spacing: .5px; background: linear-gradient(90deg, var(--accent), var(--accent-2));
       -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 1.5rem;
     }
-    .hero { background: linear-gradient(180deg, rgba(124,77,255,.15), transparent);
-      border-bottom: 1px solid rgba(124,77,255,0.15); }
+    .hero {
+      background: linear-gradient(180deg, rgba(124,77,255,.15), transparent);
+      border-bottom: 1px solid rgba(124,77,255,0.15);
+    }
     .search-wrap { background:#12121b; border:1px solid rgba(124,77,255,0.25); border-radius:14px; padding:16px; }
     .form-control, .btn { border-radius:10px; }
     .btn-dark { background: linear-gradient(135deg,#2a2a3a,#1b1b29); border:1px solid rgba(124,77,255,0.35); }
     .btn-dark:hover { border-color: var(--accent); box-shadow: 0 0 0 .2rem rgba(124,77,255,0.25); }
-    .game-card { background: var(--card); border:1px solid rgba(124,77,255,0.18); border-radius:16px; overflow:hidden;
-      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
-    .game-card:hover { transform: translateY(-4px); border-color: rgba(0,255,198,0.35);
-      box-shadow: 0 10px 24px rgba(0,0,0,.35), 0 0 0 1px rgba(0,255,198,0.2) inset; }
+    .game-card {
+      background: var(--card); border:1px solid rgba(124,77,255,0.18); border-radius:16px; overflow:hidden;
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .game-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(0,255,198,0.35);
+      box-shadow: 0 10px 24px rgba(0,0,0,.35), 0 0 0 1px rgba(0,255,198,0.2) inset;
+    }
     .game-img { aspect-ratio:16/9; object-fit:cover; background:#0b0b12; }
     .badge-chip { background: var(--chip); border:1px solid rgba(124,77,255,0.35); color: var(--muted); font-weight:600; }
-    .rating-badge { background: linear-gradient(180deg,#1f1f2f,#181826); border:1px solid rgba(0,255,198,0.45);
-      color: var(--accent-2); font-weight:700; }
+    .rating-badge { background: linear-gradient(180deg,#1f1f2f,#181826); border:1px solid rgba(0,255,198,0.45); color: var(--accent-2); font-weight:700; }
     .alert { border-radius:12px; border:1px solid rgba(124,77,255,0.35); background:#141420; color:var(--text); }
-    footer { background:#0f0f16; border-top:1px solid rgba(124,77,255,0.2); color:var(--muted); }
 
-    .content-display { opacity:0; transform:scale(0.98); visibility:hidden; transition: opacity .3s, transform .3s, visibility .3s; }
-    .content-display.active-section { opacity:1; transform:scale(1); visibility:visible; }
+    /* Hide inactive sections so they don't push content down */
+    .content-display { display: none; }
+    .content-display.active-section { display: block; }
 
-    /* forum styles */
-    .comment-section{ background: var(--card); border:1px solid rgba(124,77,255,0.18); border-radius:16px; overflow:hidden;
-      margin:20px auto; max-width:650px; box-shadow:0 4px 10px rgba(0,0,0,0.25); }
-    .comment-header{ cursor:pointer; background-color: var(--chip); padding:15px; border-bottom:1px solid rgba(124,77,255,0.25);
-      display:flex; align-items:center; justify-content:space-between; font-weight:600; }
-    .comment-header:hover{ background-color:#2b2b4c; }
-    .comment-header h3{ margin:0; color:var(--text); font-size:1.25rem; }
-    #forum-comment-container{ padding:15px; max-height:0; overflow:hidden; transition:max-height .3s, padding .3s; }
-    #forum-comment-container.is-expanded{ max-height:600px; }
-    #forum-comment-list { padding:0; margin:0; }
-    .forum-comment{ background: var(--bg2); border-radius:10px; padding:10px 14px; margin-bottom:12px;
-      border-left:3px solid var(--accent-2); list-style:none; word-wrap: break-word; }
-    .forum-comment .meta{ display:flex; gap:8px; align-items:baseline; margin-bottom:4px; }
-    .forum-comment .meta strong{ color: var(--accent-2); font-size:.95rem; }
-    .forum-comment .meta small{ color: var(--muted); font-size:.8rem; }
-    #forum-comment-form{ margin-top:20px; display:flex; gap:10px; }
-    #forum-comment-form textarea{ flex-grow:1; background-color: var(--bg2); border:1px solid rgba(124,77,255,0.35);
-      border-radius:10px; padding:10px; color:var(--text); resize:vertical; }
-    #forum-comment-form button{ background: linear-gradient(90deg, var(--accent), var(--accent-2)); border:none; color:#0e0e14;
-      font-weight:700; border-radius:10px; padding:10px 15px; cursor:pointer; transition: opacity .2s; }
-    #forum-comment-form button:hover{ opacity:.9; }
+    .detail-actions { display:flex; gap:.5rem; flex-wrap:wrap; margin:.5rem 0 1rem 0; }
+    .detail-actions .btn { border-radius:10px; min-width:110px; font-weight:600; }
   </style>
 </head>
 <body>
 
 <nav class="navbar navbar-dark sticky-top">
   <div class="container">
-    <a class="navbar-brand d-flex align-items-center gap-2" href="home.php">
+    <!-- Brand routes with ?section=home -->
+    <a id="brandLink" class="navbar-brand d-flex align-items-center gap-2" href="home.php?section=home">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
         <path d="M4 12l4-8 4 8-4 8-4-8Zm8 0 4-8 4 8-4 8-4-8Z" stroke="url(#g)" stroke-width="1.5"/>
         <defs><linearGradient id="g" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#7c4dff"/><stop offset="1" stop-color="#00ffc6"/></linearGradient></defs>
@@ -124,14 +129,20 @@ try {
 
 <div class="container-fluid">
   <aside class="sidebar">
-    <ul class="list-unstyled sidebar-nav">
-      <li><a href="#" data-target="home-content" class="active"><i class="bi bi-house-door me-2"></i>Home</a></li>
-      <li><a href="#" data-target="reviews-content"><i class="bi bi-star me-2"></i>Reviews</a></li>
-      <li><a href="#" data-target="mygames-content"><i class="bi bi-controller me-2"></i>My Games</a></li>
-    </ul>
-    <div class="p-3 mt-4 text-secondary text-uppercase small fw-bold">Features</div>
-    <ul class="list-unstyled sidebar-nav">
-      <li><a href="#" data-target="wishlist-content"><i class="bi bi-heart me-2"></i>Wishlist</a></li>
+    <ul class="list-unstyled sidebar-nav" id="sidebarNav">
+      <li><a href="home.php?section=home" data-target="home-content" class="active"><i class="bi bi-house-door me-2"></i>Home</a></li>
+      <li>
+        <button class="d-flex align-items-center justify-content-between" type="button"
+                data-bs-toggle="collapse" data-bs-target="#myGamesMenu" aria-expanded="false" aria-controls="myGamesMenu">
+          <span><i class="bi bi-controller me-2"></i>My Games</span>
+          <i class="bi bi-caret-down-fill"></i>
+        </button>
+        <div class="collapse submenu" id="myGamesMenu">
+          <a href="#" data-target="liked-content"><i class="bi bi-heart-fill me-2"></i>Liked Games</a>
+          <a href="#" data-target="wishlist-content"><i class="bi bi-bookmark-heart me-2"></i>Wishlist</a>
+          <a href="#" data-target="played-content"><i class="bi bi-check2-circle me-2"></i>Played Games</a>
+        </div>
+      </li>
       <li><a href="#" data-target="forum-content"><i class="bi bi-chat-dots me-2"></i>Forum</a></li>
       <li><a href="#" data-target="recommendations-content"><i class="bi bi-lightbulb me-2"></i>Recommendations</a></li>
       <li><a href="#" data-target="notifications-content"><i class="bi bi-bell me-2"></i>Notifications</a></li>
@@ -168,19 +179,14 @@ try {
     </div>
   </section>
 
-  <!-- Reviews -->
-  <section id="reviews-content" class="content-display">
+  <!-- Liked -->
+  <section id="liked-content" class="content-display">
     <div class="container my-4">
-      <h2>Reviews</h2>
-      <p class="lead text-secondary">Your latest reviews here.</p>
-    </div>
-  </section>
-
-  <!-- My Games -->
-  <section id="mygames-content" class="content-display">
-    <div class="container my-4">
-      <h2>My Games</h2>
-      <p class="lead text-secondary">Your played or liked games will appear here.</p>
+      <h2>Liked Games</h2>
+      <div id="likedStatus" class="alert d-none">Loading…</div>
+      <div id="likedList" class="row g-4">
+        <div class="col-12"><div class="alert">No liked games yet.</div></div>
+      </div>
     </div>
   </section>
 
@@ -188,7 +194,27 @@ try {
   <section id="wishlist-content" class="content-display">
     <div class="container my-4">
       <h2>Wishlist</h2>
-      <p class="lead text-secondary">Games you want to play.</p>
+      <div class="row g-4">
+        <div class="col-12"><div class="alert">No wishlist items yet.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Played -->
+  <section id="played-content" class="content-display">
+    <div class="container my-4">
+      <h2>Played Games</h2>
+      <div class="row g-4">
+        <div class="col-12"><div class="alert">No played games yet.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Reviews -->
+  <section id="reviews-content" class="content-display">
+    <div class="container my-4">
+      <h2>Reviews</h2>
+      <p class="lead text-secondary">Your latest reviews here.</p>
     </div>
   </section>
 
@@ -245,7 +271,7 @@ try {
   </div>
 </div>
 
-<footer class="text-center py-3 mt-4 fixed-bottom">
+<footer class="text-center py-3 mt-4">
   <div class="container">
     <small>&copy; 2025 GameHub • All Rights Reserved</small>
   </div>
@@ -254,7 +280,7 @@ try {
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-// Search + Recent feed with "Load more" pagination and Details modal
+// Search + Recent feed with resilient JSON (no auto-initial fetch here)
 (function(){
   const results = document.getElementById('results');
   const status  = document.getElementById('status');
@@ -266,6 +292,7 @@ try {
   const pageSize = 9;
   let totalPages = 1;
   let currentScope = 'recent';
+  let isFetching = false;
 
   function setStatus(text, type) {
     status.className = 'alert';
@@ -275,15 +302,37 @@ try {
   }
   function clearStatus(){ status.classList.add('d-none'); }
 
+  async function requestJSONOnce(bodyParams){
+    const url = 'games.php?_=' + Date.now();
+    const body = new URLSearchParams(bodyParams).toString();
+    const resp = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body });
+    const raw = await resp.text();
+    try { return { ok: resp.ok, json: JSON.parse(raw), raw }; }
+    catch { return { ok: resp.ok, json: null, raw }; }
+  }
+  async function requestJSONWithRetry(bodyParams){
+    let r = await requestJSONOnce(bodyParams);
+    const needsRetry = (!r.json) ||
+                       (r.json && r.json.success === false && (r.json.hint === 'rpc_timeout' || /timeout/i.test(r.json.message||'')));
+    if (needsRetry) {
+      await new Promise(res => setTimeout(res, 700));
+      r = await requestJSONOnce(bodyParams);
+    }
+    return r;
+  }
+
   function triggerScopeAndFetch(resetToFirst = true){
+    if (isFetching) return;
     const q = qInput.value.trim();
     currentScope = (q === '') ? 'recent' : 'search';
     if (resetToFirst) page = 1;
     fetchGames(currentScope, { append: false });
   }
 
-  function fetchGames(scope, { append = false } = {}){
+  async function fetchGames(scope, { append = false } = {}){
+    if (isFetching) return;
     if (scope) currentScope = scope;
+    isFetching = true;
 
     if (!append) {
       setStatus('Loading games…', null);
@@ -292,39 +341,26 @@ try {
     loadMoreBtn.classList.add('d-none');
 
     const q = qInput.value.trim();
-    const body = new URLSearchParams();
-    body.append('page', String(page));
-    body.append('pageSize', String(pageSize));
-    if (currentScope === 'search' && q) {
-      body.append('scope','search');
-      body.append('query', q);
-    } else {
-      body.append('scope','recent');
-    }
+    const params = { page: String(page), pageSize: String(pageSize) };
+    if (currentScope === 'search' && q) { params.scope = 'search'; params.query = q; }
+    else { params.scope = 'recent'; params.query = ''; }
 
-    fetch('games.php', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: body.toString()
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (!data || data.success === false) {
-        setStatus(data?.message || 'Failed to load games', 'danger');
-        return;
-      }
+    try {
+      const { ok, json, raw } = await requestJSONWithRetry(params);
+      if (!ok || !json) { console.error('games.php non-JSON/HTTP error:\n', raw); setStatus('Failed to load games (temporary server hiccup).', 'danger'); return; }
+      if (json.success === false) { setStatus(json.message || 'Failed to load games', 'danger'); return; }
+
       clearStatus();
-
-      totalPages = Number(data.totalPages || 1);
-      renderGames(data.items || [], { append });
+      totalPages = Number(json.totalPages || 1);
+      renderGames(json.items || [], { append });
 
       const canLoadMore = (currentScope === 'recent') && (page < totalPages);
       loadMoreBtn.classList.toggle('d-none', !canLoadMore);
-    })
-    .catch(err => {
-      console.error(err);
-      setStatus('Network error loading games', 'danger');
-    });
+    } catch (err) {
+      console.error(err); setStatus('Network error loading games', 'danger');
+    } finally {
+      isFetching = false;
+    }
   }
 
   function renderGames(items, { append = false } = {}){
@@ -361,25 +397,18 @@ try {
     }).join('');
 
     if (append) {
-      const temp = document.createElement('div');
-      temp.innerHTML = cards;
+      const temp = document.createElement('div'); temp.innerHTML = cards;
       [...temp.children].forEach(c => results.appendChild(c));
     } else {
       results.innerHTML = cards;
     }
 
-    // bind Details buttons
     results.querySelectorAll('[data-action="details"]').forEach(el=>{
-      el.onclick = (e)=>{
-        e.preventDefault();
-        const id = parseInt(el.dataset.id || '0', 10);
-        if (!id) return;
-        openDetails(id);
-      };
+      el.onclick = (e)=>{ e.preventDefault(); const id = parseInt(el.dataset.id || '0', 10); if (!id) return; openDetails(id); };
     });
   }
 
-  // --- FIXED: explicit ./game.php URL + robust error surfacing ---
+  // ===== Details modal + Like button (calls likes.php) =====
   window.openDetails = function(id){
     const detailsModalEl = document.getElementById('gameDetailsModal');
     const detailsTitleEl = document.getElementById('gdmTitle');
@@ -391,137 +420,273 @@ try {
     detailsBodyEl.innerHTML = 'Loading…';
     detailsModal.show();
 
-    const body = new URLSearchParams();
-    body.append('id', String(id));
+    const body = new URLSearchParams(); body.append('id', String(id));
+    fetch('./game.php', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: body.toString() })
+      .then(async (r)=> { const text = await r.text(); try { return { ok: r.ok, json: JSON.parse(text), text }; } catch { return { ok: r.ok, json: null, text }; } })
+      .then(({ok, json, text})=>{
+        if (!ok || !json) { console.error('game.php error:', text); detailsBodyEl.innerHTML = `<div class="alert alert-danger">Failed to load details.</div>`; return; }
+        if (json.success === false) { detailsBodyEl.innerHTML = `<div class="alert alert-danger">${json.message || 'Failed to load details.'}</div>`; return; }
 
-    fetch('./game.php', {
-      method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body: body.toString()
-    })
-    .then(async (r) => {
-      const text = await r.text();
-      try { return { ok: r.ok, json: JSON.parse(text), text }; }
-      catch { return { ok: r.ok, json: null, text }; }
-    })
-    .then(({ok, json, text})=>{
-      if (!ok) {
-        console.error('game.php HTTP error:', text);
-        detailsBodyEl.innerHTML = `<div class="alert alert-danger">Endpoint error.<br><pre style="white-space:pre-wrap">${text}</pre></div>`;
-        return;
-      }
-      if (!json || json.success === false) {
-        const msg = json?.message || 'Unknown error';
-        console.error('game.php app error:', msg, 'raw:', text);
-        detailsBodyEl.innerHTML = `<div class="alert alert-danger">Failed to load details: ${msg}</div>`;
-        return;
-      }
-      const g = (typeof json.item === 'string') ? JSON.parse(json.item) : (json.item || {});
-      if (!g || !g.rawg_id) {
-        detailsBodyEl.innerHTML = `<div class="alert alert-warning">No details found for this game.</div>`;
-        return;
-      }
+        const g = (typeof json.item === 'string') ? JSON.parse(json.item) : (json.item || {});
+        if (!g || !g.rawg_id) { detailsBodyEl.innerHTML = `<div class="alert alert-warning">No details found for this game.</div>`; return; }
 
-      const pill = (arr)=> (arr && arr.length)
-        ? `<div class="mb-2">${arr.map(x=>`<span class="badge badge-chip me-1 mb-1">${x}</span>`).join('')}</div>`
-        : '';
+        const pill = (arr)=> (arr && arr.length) ? `<div class="mb-2">${arr.map(x=>`<span class="badge badge-chip me-1 mb-1">${x}</span>`).join('')}</div>` : '';
+        const hero = g.background_image_additional || g.background_image || '';
+        const infoRows = [
+          ['Released', g.released || 'Unknown'],
+          ['Rating', (g.rating!=null ? Number(g.rating).toFixed(1) : '—')],
+          ['Metacritic', (g.metacritic!=null ? g.metacritic : '—')],
+          ['Playtime', (g.playtime!=null ? g.playtime+'h' : '—')],
+          ['ESRB', g.esrb_rating || '—'],
+          ['Website', g.website ? `<a href="${g.website}" target="_blank" rel="noopener">Visit</a>` : '—'],
+          ['Reddit', g.reddit_url ? `<a href="${g.reddit_url}" target="_blank" rel="noopener">Community</a>` : '—'],
+        ].map(([k,v])=>`<div class="d-flex justify-content-between border-bottom border-1 border-opacity-25 py-2"><div class="text-secondary">${k}</div><div>${v}</div></div>`).join('');
 
-      const hero = g.background_image_additional || g.background_image || '';
-      const infoRows = [
-        ['Released', g.released || 'Unknown'],
-        ['Rating', (g.rating!=null ? Number(g.rating).toFixed(1) : '—')],
-        ['Metacritic', (g.metacritic!=null ? g.metacritic : '—')],
-        ['Playtime', (g.playtime!=null ? g.playtime+'h' : '—')],
-        ['ESRB', g.esrb_rating || '—'],
-        ['Website', g.website ? `<a href="${g.website}" target="_blank" rel="noopener">Visit</a>` : '—'],
-        ['Reddit', g.reddit_url ? `<a href="${g.reddit_url}" target="_blank" rel="noopener">Community</a>` : '—'],
-      ].map(([k,v])=>`<div class="d-flex justify-content-between border-bottom border-1 border-opacity-25 py-2"><div class="text-secondary">${k}</div><div>${v}</div></div>`).join('');
+        const shots = (g.screenshots||[]).slice(0,6).map(u=>`
+          <div class="col-6 col-md-4 mb-3">
+            <img src="${u}" class="w-100 rounded-3" style="border:1px solid rgba(124,77,255,.25)" alt="">
+          </div>`).join('');
 
-      const shots = (g.screenshots||[]).slice(0,6).map(u=>`
-        <div class="col-6 col-md-4 mb-3">
-          <img src="${u}" class="w-100 rounded-3" style="border:1px solid rgba(124,77,255,.25)" alt="">
-        </div>`).join('');
+        const desc = (g.description || g.description_raw || '').trim();
+        const descHtml = g.description ? g.description : (desc ? `<p>${desc.replace(/\n/g,'<br>')}</p>` : '<p>No description available.</p>');
 
-      const desc = (g.description || g.description_raw || '').trim();
-      const descHtml = g.description ? g.description : (desc ? `<p>${desc.replace(/\n/g,'<br>')}</p>` : '<p>No description available.</p>');
+        detailsTitleEl.textContent = g.name || 'Game Details';
+        detailsBodyEl.innerHTML = `
+          ${hero ? `<img src="${hero}" class="w-100 mb-3 rounded-3" style="border:1px solid rgba(124,77,255,.25)" alt="">` : ''}
 
-      document.getElementById('gdmTitle').textContent = g.name || 'Game Details';
-      document.getElementById('gdmBody').innerHTML = `
-        ${hero ? `<img src="${hero}" class="w-100 mb-3 rounded-3" style="border:1px solid rgba(124,77,255,.25)" alt="">` : ''}
+          ${pill(g.platforms)}
+          ${pill(g.genres)}
+          ${pill(g.tags)}
+          ${pill(g.stores)}
+          ${pill(g.developers)}
+          ${pill(g.publishers)}
 
-        ${pill(g.platforms)}
-        ${pill(g.genres)}
-        ${pill(g.tags)}
-        ${pill(g.stores)}
-        ${pill(g.developers)}
-        ${pill(g.publishers)}
-
-        <div class="row g-3">
-          <div class="col-lg-8">
-            <h6 class="mb-2">About</h6>
-            <div class="mb-3" style="line-height:1.6">${descHtml}</div>
-            ${shots ? `<h6 class="mb-2">Screenshots</h6><div class="row">${shots}</div>` : ''}
+          <div class="detail-actions" id="detailActions">
+            <button class="btn btn-sm btn-outline-light" data-act="like" data-id="${g.rawg_id}">❤️ Like</button>
+            <button class="btn btn-sm btn-outline-light" data-act="wishlist" data-id="${g.rawg_id}">📝 Wishlist</button>
+            <button class="btn btn-sm btn-outline-light" data-act="played" data-id="${g.rawg_id}">✅ Played</button>
           </div>
-          <div class="col-lg-4">
-            <h6 class="mb-2">Info</h6>
-            ${infoRows}
+
+          <div class="row g-3">
+            <div class="col-lg-8">
+              <h6 class="mb-2">About</h6>
+              <div class="mb-3" style="line-height:1.6">${descHtml}</div>
+              ${shots ? `<h6 class="mb-2">Screenshots</h6><div class="row">${shots}</div>` : ''}
+            </div>
+            <div class="col-lg-4">
+              <h6 class="mb-2">Info</h6>
+              ${infoRows}
+            </div>
           </div>
-        </div>
-      `;
-    })
-    .catch(err=>{
-      console.error('fetch game.php failed:', err);
-      document.getElementById('gdmBody').innerHTML = `<div class="alert alert-danger">Network error.</div>`;
-    });
+        `;
+
+        // === Like button (POST to likes.php) ===
+        const actionsWrap = document.getElementById('detailActions');
+        if (actionsWrap) {
+          const likeBtn = actionsWrap.querySelector('button[data-act="like"]');
+          if (likeBtn) {
+            let busy = false;
+            likeBtn.addEventListener('click', async ()=> {
+              if (busy) return; busy = true;
+              likeBtn.classList.toggle('btn-outline-light');
+              likeBtn.classList.toggle('btn-light');
+
+              const payload = new URLSearchParams();
+              payload.append('action', 'add');
+              payload.append('rawg_id', String(g.rawg_id || ''));
+              payload.append('name', g.name || '');
+              payload.append('image', g.background_image || g.background_image_additional || '');
+              payload.append('released', g.released || '');
+              payload.append('rating', (g.rating!=null ? String(g.rating) : ''));
+
+              try {
+                const r = await fetch('likes.php?_=' + Date.now(), {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                  body: payload.toString()
+                });
+                const raw = await r.text();
+                let j = null; try { j = JSON.parse(raw); } catch {}
+                if (!r.ok || !j || j.success === false) {
+                  console.error('likes.php add failed:', raw);
+                  likeBtn.classList.toggle('btn-outline-light');
+                  likeBtn.classList.toggle('btn-light');
+                  alert(j?.message || 'Failed to like this game.');
+                } else {
+                  if (document.getElementById('liked-content').classList.contains('active-section') && typeof window.loadLikes === 'function') {
+                    window.loadLikes();
+                  }
+                }
+              } catch (e) {
+                console.error('likes.php network error', e);
+                likeBtn.classList.toggle('btn-outline-light');
+                likeBtn.classList.toggle('btn-light');
+                alert('Network error while liking the game.');
+              } finally {
+                busy = false;
+              }
+            });
+          }
+
+          // Wishlist/Played visual toggles (no backend yet)
+          actionsWrap.querySelectorAll('button[data-act="wishlist"], button[data-act="played"]').forEach(b=>{
+            b.addEventListener('click', ()=> {
+              b.classList.toggle('btn-outline-light');
+              b.classList.toggle('btn-light');
+            });
+          });
+        }
+      })
+      .catch(err=>{ console.error('fetch game.php failed:', err); detailsBodyEl.innerHTML = `<div class="alert alert-danger">Network error.</div>`; });
   }
 
   // Events
   btn.addEventListener('click', e => { e.preventDefault(); triggerScopeAndFetch(true); });
   qInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); triggerScopeAndFetch(true); } });
-  loadMoreBtn.addEventListener('click', () => {
-    if (page < totalPages) { page += 1; fetchGames(currentScope, { append: true }); }
-  });
+  loadMoreBtn.addEventListener('click', () => { if (page < totalPages) { page += 1; fetchGames(currentScope, { append: true }); } });
 
-  // Initial load
-  triggerScopeAndFetch(true);
-
-  // Expose for sidebar when returning to Home tab
+  // Expose for section router
   window.fetchGames = () => triggerScopeAndFetch(false);
 })();
 </script>
 
 <script>
-// sidebar functionality
+// ===== Liked list loader/render =====
+(function(){
+  const likedList   = document.getElementById('likedList');
+  const likedStatus = document.getElementById('likedStatus');
+
+  function setLikedStatus(text, type) {
+    likedStatus.className = 'alert';
+    likedStatus.classList.add(type ? `alert-${type}` : 'alert-info');
+    likedStatus.innerHTML = text;
+    likedStatus.classList.remove('d-none');
+  }
+  function clearLikedStatus(){ likedStatus.classList.add('d-none'); }
+
+  async function loadLikes() {
+    if (!likedList) return;
+    setLikedStatus('Loading your liked games…', null);
+    likedList.innerHTML = '';
+
+    try {
+      const r = await fetch('likes.php?action=list&_=' + Date.now(), { method: 'GET' });
+      const raw = await r.text();
+      let j = null; try { j = JSON.parse(raw); } catch { j = null; }
+      if (!r.ok || !j) { console.error('likes list non-JSON/HTTP error:', raw); setLikedStatus('Failed to load liked games.', 'danger'); return; }
+      if (j.success === false) { setLikedStatus(j.message || 'Failed to load liked games.', 'danger'); return; }
+
+      clearLikedStatus();
+      renderLiked(j.items || []);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    } catch (e) {
+      console.error('likes list network error', e);
+      setLikedStatus('Network error loading liked games.', 'danger');
+    }
+  }
+
+  function renderLiked(items) {
+    if (!items.length) {
+      likedList.innerHTML = '<div class="col-12"><div class="alert">No liked games yet.</div></div>';
+      return;
+    }
+    likedList.innerHTML = items.map(g => {
+      const id   = g.rawg_id ?? g.id ?? '';
+      const img  = g.background_image || g.image || '';
+      const name = g.name || 'Untitled';
+      const rating = (g.rating != null && g.rating !== '') ? Number(g.rating).toFixed(1) : null;
+      const released = g.released ? new Date(g.released).toLocaleDateString() : 'Unknown';
+      const platforms = (g.platforms || []).slice(0,4).map(p => `<span class="badge badge-chip me-1 mb-1">${(typeof p==='string')?p:(p?.name||'')}</span>`).join('');
+      const genres = (g.genres || []).slice(0,3).map(p => `<span class="badge badge-chip me-1 mb-1">${(typeof p==='string')?p:(p?.name||'')}</span>`).join('');
+
+      return `
+        <div class="col-12 col-sm-6 col-lg-4">
+          <div class="game-card h-100">
+            ${img ? `<img src="${img}" class="game-img w-100" alt="${name}">` : ''}
+            <div class="p-3">
+              <div class="d-flex justify-content-between align-items-start mb-1">
+                <h5 class="mb-0">${name}</h5>
+                ${rating !== null ? `<span class="badge rating-badge ms-2">${rating}</span>` : ''}
+              </div>
+              <div class="text-secondary small mb-2">Released: ${released}</div>
+              ${platforms ? `<div class="mb-2">${platforms}</div>` : ''}
+              ${genres ? `<div class="mb-2">${genres}</div>` : ''}
+              <a href="#" class="btn btn-sm btn-light" data-action="details" data-id="${id}">Details</a>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    likedList.querySelectorAll('[data-action="details"]').forEach(el=>{
+      el.onclick = (e)=>{ e.preventDefault(); const id = parseInt(el.dataset.id || '0', 10); if (!id) return; window.openDetails(id); };
+    });
+  }
+
+  window.loadLikes = loadLikes;
+})();
+</script>
+
+<script>
+// Sidebar routing + single-init (brand/home triggers only one fetch)
 document.addEventListener('DOMContentLoaded', () => {
-  const links = document.querySelectorAll('.sidebar-nav a');
+  const nav = document.getElementById('sidebarNav');
   const sections = document.querySelectorAll('.content-display');
   const homeSectionId = 'home-content';
-  const fetchGames = window.fetchGames;
 
   function showSection(targetId) {
     sections.forEach(sec => sec.classList.remove('active-section'));
-    links.forEach(link => link.classList.remove('active'));
-
     const targetSection = document.getElementById(targetId);
-    const activeLink = document.querySelector(`.sidebar-nav a[data-target="${targetId}"]`);
-
     if (targetSection) targetSection.classList.add('active-section');
+
+    nav.querySelectorAll('a').forEach(link => link.classList.remove('active'));
+    const activeLink = nav.querySelector(`a[data-target="${targetId}"]`);
     if (activeLink) activeLink.classList.add('active');
 
+    const myGamesMenu = document.getElementById('myGamesMenu');
+    const isMyGamesChild = ['liked-content','wishlist-content','played-content'].includes(targetId);
+    if (myGamesMenu) {
+      const bsCollapse = bootstrap.Collapse.getOrCreateInstance(myGamesMenu, {toggle:false});
+      if (isMyGamesChild) bsCollapse.show(); else bsCollapse.hide();
+    }
+
     localStorage.setItem('activeSection', targetId);
-    if (targetId === homeSectionId && typeof fetchGames === 'function') fetchGames();
+    window.scrollTo({ top: 0, behavior: 'instant' });
+
+    if (targetId === homeSectionId && typeof window.fetchGames === 'function') window.fetchGames();
+    if (targetId === 'liked-content' && typeof window.loadLikes === 'function') window.loadLikes();
   }
 
-  links.forEach(link => {
+  function sectionFromQuery() {
+    const m = location.search.match(/[?&]section=([^&]+)/i);
+    if (!m) return null;
+    const s = decodeURIComponent(m[1] || '').toLowerCase();
+    if (s === 'home') return homeSectionId;
+    if (s === 'liked') return 'liked-content';
+    if (s === 'wishlist') return 'wishlist-content';
+    if (s === 'played') return 'played-content';
+    if (s === 'forum') return 'forum-content';
+    if (s === 'reco' || s === 'recommendations') return 'recommendations-content';
+    if (s === 'notifications') return 'notifications-content';
+    return null;
+  }
+
+  // Sidebar links
+  nav.querySelectorAll('a[data-target]').forEach(link => {
     link.addEventListener('click', e => {
       e.preventDefault();
       const targetId = link.dataset.target;
       if (targetId) showSection(targetId);
+      if (link.href && /section=home/i.test(link.href)) {
+        history.replaceState(null, '', 'home.php?section=home');
+      }
     });
   });
 
+  // Initial section: URL param, else saved, else Home — triggers ONE fetch
+  const urlSection = sectionFromQuery();
   const saved = localStorage.getItem('activeSection');
-  if (saved && document.getElementById(saved)) showSection(saved);
+  if (urlSection && document.getElementById(urlSection)) showSection(urlSection);
+  else if (saved && document.getElementById(saved)) showSection(saved);
   else showSection(homeSectionId);
 });
 </script>
