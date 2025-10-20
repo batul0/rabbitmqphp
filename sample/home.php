@@ -77,10 +77,7 @@ try {
       font-weight: 800; letter-spacing: .5px; background: linear-gradient(90deg, var(--accent), var(--accent-2));
       -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 1.5rem;
     }
-    .hero {
-      background: linear-gradient(180deg, rgba(124,77,255,.15), transparent);
-      border-bottom: 1px solid rgba(124,77,255,0.15);
-    }
+    .hero { background: linear-gradient(180deg, rgba(124,77,255,.15), transparent); border-bottom: 1px solid rgba(124,77,255,0.15); }
     .search-wrap { background:#12121b; border:1px solid rgba(124,77,255,0.25); border-radius:14px; padding:16px; }
     .form-control, .btn { border-radius:10px; }
     .btn-dark { background: linear-gradient(135deg,#2a2a3a,#1b1b29); border:1px solid rgba(124,77,255,0.35); }
@@ -111,7 +108,6 @@ try {
 
 <nav class="navbar navbar-dark sticky-top">
   <div class="container">
-    <!-- Brand routes with ?section=home -->
     <a id="brandLink" class="navbar-brand d-flex align-items-center gap-2" href="home.php?section=home">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
         <path d="M4 12l4-8 4 8-4 8-4-8Zm8 0 4-8 4 8-4 8-4-8Z" stroke="url(#g)" stroke-width="1.5"/>
@@ -194,7 +190,8 @@ try {
   <section id="wishlist-content" class="content-display">
     <div class="container my-4">
       <h2>Wishlist</h2>
-      <div class="row g-4">
+      <div id="wishlistStatus" class="alert d-none">Loading…</div>
+      <div id="wishlistList" class="row g-4">
         <div class="col-12"><div class="alert">No wishlist items yet.</div></div>
       </div>
     </div>
@@ -204,7 +201,8 @@ try {
   <section id="played-content" class="content-display">
     <div class="container my-4">
       <h2>Played Games</h2>
-      <div class="row g-4">
+      <div id="playedStatus" class="alert d-none">Loading…</div>
+      <div id="playedList" class="row g-4">
         <div class="col-12"><div class="alert">No played games yet.</div></div>
       </div>
     </div>
@@ -408,7 +406,7 @@ try {
     });
   }
 
-  // ===== Details modal + Like button (calls likes.php) =====
+  // ===== Details modal + Like/Wishlist/Played buttons =====
   window.openDetails = function(id){
     const detailsModalEl = document.getElementById('gameDetailsModal');
     const detailsTitleEl = document.getElementById('gdmTitle');
@@ -480,60 +478,93 @@ try {
           </div>
         `;
 
-        // === Like button (POST to likes.php) ===
+        // === Action buttons ===
         const actionsWrap = document.getElementById('detailActions');
-        if (actionsWrap) {
-          const likeBtn = actionsWrap.querySelector('button[data-act="like"]');
-          if (likeBtn) {
-            let busy = false;
-            likeBtn.addEventListener('click', async ()=> {
-              if (busy) return; busy = true;
+        if (!actionsWrap) return;
+
+        // helper to POST toggle
+        async function postToggle(url, meta) {
+          const payload = new URLSearchParams();
+          payload.append('action', 'toggle');
+          payload.append('rawg_id', String(g.rawg_id || ''));
+          payload.append('liked', '1'); // toggle "on"
+          payload.append('name', g.name || '');
+          payload.append('image', g.background_image || g.background_image_additional || '');
+          payload.append('released', g.released || '');
+          payload.append('rating', (g.rating!=null ? String(g.rating) : ''));
+          const r = await fetch(url + '?_=' + Date.now(), {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: payload.toString()
+          });
+          const raw = await r.text();
+          let j = null; try { j = JSON.parse(raw); } catch {}
+          if (!r.ok || !j || j.success === false) throw new Error(raw || 'toggle failed');
+        }
+
+        // Like
+        const likeBtn = actionsWrap.querySelector('button[data-act="like"]');
+        if (likeBtn) {
+          let busy = false;
+          likeBtn.addEventListener('click', async ()=> {
+            if (busy) return; busy = true;
+            likeBtn.classList.toggle('btn-outline-light');
+            likeBtn.classList.toggle('btn-light');
+            try {
+              await postToggle('likes.php');
+              if (document.getElementById('liked-content').classList.contains('active-section') && typeof window.loadLikes === 'function') {
+                window.loadLikes();
+              }
+            } catch (e) {
+              console.error('likes toggle failed', e);
               likeBtn.classList.toggle('btn-outline-light');
               likeBtn.classList.toggle('btn-light');
+              alert('Failed to update Like.');
+            } finally { busy = false; }
+          });
+        }
 
-              const payload = new URLSearchParams();
-              payload.append('action', 'add');
-              payload.append('rawg_id', String(g.rawg_id || ''));
-              payload.append('name', g.name || '');
-              payload.append('image', g.background_image || g.background_image_additional || '');
-              payload.append('released', g.released || '');
-              payload.append('rating', (g.rating!=null ? String(g.rating) : ''));
-
-              try {
-                const r = await fetch('likes.php?_=' + Date.now(), {
-                  method: 'POST',
-                  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                  body: payload.toString()
-                });
-                const raw = await r.text();
-                let j = null; try { j = JSON.parse(raw); } catch {}
-                if (!r.ok || !j || j.success === false) {
-                  console.error('likes.php add failed:', raw);
-                  likeBtn.classList.toggle('btn-outline-light');
-                  likeBtn.classList.toggle('btn-light');
-                  alert(j?.message || 'Failed to like this game.');
-                } else {
-                  if (document.getElementById('liked-content').classList.contains('active-section') && typeof window.loadLikes === 'function') {
-                    window.loadLikes();
-                  }
-                }
-              } catch (e) {
-                console.error('likes.php network error', e);
-                likeBtn.classList.toggle('btn-outline-light');
-                likeBtn.classList.toggle('btn-light');
-                alert('Network error while liking the game.');
-              } finally {
-                busy = false;
+        // Wishlist
+        const wishBtn = actionsWrap.querySelector('button[data-act="wishlist"]');
+        if (wishBtn) {
+          let busy = false;
+          wishBtn.addEventListener('click', async ()=> {
+            if (busy) return; busy = true;
+            wishBtn.classList.toggle('btn-outline-light');
+            wishBtn.classList.toggle('btn-light');
+            try {
+              await postToggle('wishlist.php');
+              if (document.getElementById('wishlist-content').classList.contains('active-section') && typeof window.loadWishlist === 'function') {
+                window.loadWishlist();
               }
-            });
-          }
+            } catch (e) {
+              console.error('wishlist toggle failed', e);
+              wishBtn.classList.toggle('btn-outline-light');
+              wishBtn.classList.toggle('btn-light');
+              alert('Failed to update Wishlist.');
+            } finally { busy = false; }
+          });
+        }
 
-          // Wishlist/Played visual toggles (no backend yet)
-          actionsWrap.querySelectorAll('button[data-act="wishlist"], button[data-act="played"]').forEach(b=>{
-            b.addEventListener('click', ()=> {
-              b.classList.toggle('btn-outline-light');
-              b.classList.toggle('btn-light');
-            });
+        // Played
+        const playedBtn = actionsWrap.querySelector('button[data-act="played"]');
+        if (playedBtn) {
+          let busy = false;
+          playedBtn.addEventListener('click', async ()=> {
+            if (busy) return; busy = true;
+            playedBtn.classList.toggle('btn-outline-light');
+            playedBtn.classList.toggle('btn-light');
+            try {
+              await postToggle('played.php');
+              if (document.getElementById('played-content').classList.contains('active-section') && typeof window.loadPlayed === 'function') {
+                window.loadPlayed();
+              }
+            } catch (e) {
+              console.error('played toggle failed', e);
+              playedBtn.classList.toggle('btn-outline-light');
+              playedBtn.classList.toggle('btn-light');
+              alert('Failed to update Played.');
+            } finally { busy = false; }
           });
         }
       })
@@ -627,6 +658,154 @@ try {
 </script>
 
 <script>
+// ===== Wishlist list loader/render =====
+(function(){
+  const listEl   = document.getElementById('wishlistList');
+  const statusEl = document.getElementById('wishlistStatus');
+
+  function setStatus(text, type) {
+    statusEl.className = 'alert';
+    statusEl.classList.add(type ? `alert-${type}` : 'alert-info');
+    statusEl.innerHTML = text;
+    statusEl.classList.remove('d-none');
+  }
+  function clearStatus(){ statusEl.classList.add('d-none'); }
+
+  async function loadWishlist() {
+    if (!listEl) return;
+    setStatus('Loading your wishlist…', null);
+    listEl.innerHTML = '';
+    try {
+      const r = await fetch('wishlist.php?action=list&_=' + Date.now(), { method: 'GET' });
+      const raw = await r.text();
+      let j = null; try { j = JSON.parse(raw); } catch { j = null; }
+      if (!r.ok || !j) { console.error('wishlist list non-JSON/HTTP error:', raw); setStatus('Failed to load wishlist.', 'danger'); return; }
+      if (j.success === false) { setStatus(j.message || 'Failed to load wishlist.', 'danger'); return; }
+
+      clearStatus();
+      render(j.items || []);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    } catch (e) {
+      console.error('wishlist list network error', e);
+      setStatus('Network error loading wishlist.', 'danger');
+    }
+  }
+
+  function render(items) {
+    if (!items.length) {
+      listEl.innerHTML = '<div class="col-12"><div class="alert">No wishlist items yet.</div></div>';
+      return;
+    }
+    listEl.innerHTML = items.map(g => {
+      const id   = g.rawg_id ?? g.id ?? '';
+      const img  = g.background_image || g.image || '';
+      const name = g.name || 'Untitled';
+      const rating = (g.rating != null && g.rating !== '') ? Number(g.rating).toFixed(1) : null;
+      const released = g.released ? new Date(g.released).toLocaleDateString() : 'Unknown';
+      const platforms = (g.platforms || []).slice(0,4).map(p => `<span class="badge badge-chip me-1 mb-1">${(typeof p==='string')?p:(p?.name||'')}</span>`).join('');
+      const genres = (g.genres || []).slice(0,3).map(p => `<span class="badge badge-chip me-1 mb-1">${(typeof p==='string')?p:(p?.name||'')}</span>`).join('');
+      return `
+        <div class="col-12 col-sm-6 col-lg-4">
+          <div class="game-card h-100">
+            ${img ? `<img src="${img}" class="game-img w-100" alt="${name}">` : ''}
+            <div class="p-3">
+              <div class="d-flex justify-content-between align-items-start mb-1">
+                <h5 class="mb-0">${name}</h5>
+                ${rating !== null ? `<span class="badge rating-badge ms-2">${rating}</span>` : ''}
+              </div>
+              <div class="text-secondary small mb-2">Released: ${released}</div>
+              ${platforms ? `<div class="mb-2">${platforms}</div>` : ''}
+              ${genres ? `<div class="mb-2">${genres}</div>` : ''}
+              <a href="#" class="btn btn-sm btn-light" data-action="details" data-id="${id}">Details</a>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('[data-action="details"]').forEach(el=>{
+      el.onclick = (e)=>{ e.preventDefault(); const id = parseInt(el.dataset.id || '0', 10); if (!id) return; window.openDetails(id); };
+    });
+  }
+
+  window.loadWishlist = loadWishlist;
+})();
+</script>
+
+<script>
+// ===== Played list loader/render =====
+(function(){
+  const listEl   = document.getElementById('playedList');
+  const statusEl = document.getElementById('playedStatus');
+
+  function setStatus(text, type) {
+    statusEl.className = 'alert';
+    statusEl.classList.add(type ? `alert-${type}` : 'alert-info');
+    statusEl.innerHTML = text;
+    statusEl.classList.remove('d-none');
+  }
+  function clearStatus(){ statusEl.classList.add('d-none'); }
+
+  async function loadPlayed() {
+    if (!listEl) return;
+    setStatus('Loading your played games…', null);
+    listEl.innerHTML = '';
+    try {
+      const r = await fetch('played.php?action=list&_=' + Date.now(), { method: 'GET' });
+      const raw = await r.text();
+      let j = null; try { j = JSON.parse(raw); } catch { j = null; }
+      if (!r.ok || !j) { console.error('played list non-JSON/HTTP error:', raw); setStatus('Failed to load played games.', 'danger'); return; }
+      if (j.success === false) { setStatus(j.message || 'Failed to load played games.', 'danger'); return; }
+
+      clearStatus();
+      render(j.items || []);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    } catch (e) {
+      console.error('played list network error', e);
+      setStatus('Network error loading played games.', 'danger');
+    }
+  }
+
+  function render(items) {
+    if (!items.length) {
+      listEl.innerHTML = '<div class="col-12"><div class="alert">No played games yet.</div></div>';
+      return;
+    }
+    listEl.innerHTML = items.map(g => {
+      const id   = g.rawg_id ?? g.id ?? '';
+      const img  = g.background_image || g.image || '';
+      const name = g.name || 'Untitled';
+      const rating = (g.rating != null && g.rating !== '') ? Number(g.rating).toFixed(1) : null;
+      const released = g.released ? new Date(g.released).toLocaleDateString() : 'Unknown';
+      const platforms = (g.platforms || []).slice(0,4).map(p => `<span class="badge badge-chip me-1 mb-1">${(typeof p==='string')?p:(p?.name||'')}</span>`).join('');
+      const genres = (g.genres || []).slice(0,3).map(p => `<span class="badge badge-chip me-1 mb-1">${(typeof p==='string')?p:(p?.name||'')}</span>`).join('');
+      return `
+        <div class="col-12 col-sm-6 col-lg-4">
+          <div class="game-card h-100">
+            ${img ? `<img src="${img}" class="game-img w-100" alt="${name}">` : ''}
+            <div class="p-3">
+              <div class="d-flex justify-content-between align-items-start mb-1">
+                <h5 class="mb-0">${name}</h5>
+                ${rating !== null ? `<span class="badge rating-badge ms-2">${rating}</span>` : ''}
+              </div>
+              <div class="text-secondary small mb-2">Released: ${released}</div>
+              ${platforms ? `<div class="mb-2">${platforms}</div>` : ''}
+              ${genres ? `<div class="mb-2">${genres}</div>` : ''}
+              <a href="#" class="btn btn-sm btn-light" data-action="details" data-id="${id}">Details</a>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('[data-action="details"]').forEach(el=>{
+      el.onclick = (e)=>{ e.preventDefault(); const id = parseInt(el.dataset.id || '0', 10); if (!id) return; window.openDetails(id); };
+    });
+  }
+
+  window.loadPlayed = loadPlayed;
+})();
+</script>
+
+<script>
 // Sidebar routing + single-init (brand/home triggers only one fetch)
 document.addEventListener('DOMContentLoaded', () => {
   const nav = document.getElementById('sidebarNav');
@@ -654,6 +833,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (targetId === homeSectionId && typeof window.fetchGames === 'function') window.fetchGames();
     if (targetId === 'liked-content' && typeof window.loadLikes === 'function') window.loadLikes();
+    if (targetId === 'wishlist-content' && typeof window.loadWishlist === 'function') window.loadWishlist();
+    if (targetId === 'played-content' && typeof window.loadPlayed === 'function') window.loadPlayed();
   }
 
   function sectionFromQuery() {
