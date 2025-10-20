@@ -17,7 +17,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
-/** PDO helper */
+
 function getPDO(): PDO {
   $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
   $options = [
@@ -29,7 +29,7 @@ function getPDO(): PDO {
   return new PDO($dsn, DB_USER, DB_PASS, $options);
 }
 
-/** ===== Auth helpers ===== */
+
 function doLogin(string $username, string $password): array {
   if ($username === '' || $password === '') {
     return ['success' => false, 'message' => 'Username and password required'];
@@ -144,7 +144,7 @@ function doLogout(string $sessionId): array {
   }
 }
 
-/** ===== Games helpers ===== */
+
 function upsertGame(PDO $pdo, array $g): void {
   $stmt = $pdo->prepare(
     'INSERT INTO games (rawg_id, name, released, rating, background_image, platforms, genres)
@@ -154,7 +154,7 @@ function upsertGame(PDO $pdo, array $g): void {
        background_image=VALUES(background_image), platforms=VALUES(platforms), genres=VALUES(genres)'
   );
 
-  // Normalize platforms/genres to array of strings
+
   $platNames = [];
   if (!empty($g['platforms']) && is_array($g['platforms'])) {
     foreach ($g['platforms'] as $p) {
@@ -263,7 +263,7 @@ function getGamesPage(PDO $pdo, int $page, int $pageSize, string $query): array 
   return [$items, $total, $totalPages];
 }
 
-/** Ensure DB has enough rows for requested recent page; backfill via DMZ */
+
 function backfillRecentWindow(PDO $pdo, int $needUpToPage, int $pageSize, string $from, string $to): void {
   $MAX_ROUNDS = 6; $round = 0;
 
@@ -302,7 +302,7 @@ function backfillRecentWindow(PDO $pdo, int $needUpToPage, int $pageSize, string
   }
 }
 
-/** 🔎 SEARCH: Always DMZ-first by relevance; cache results */
+
 function doGamesSearch(int $page, int $pageSize, string $query): array {
   $query = trim($query);
   if ($query === '') {
@@ -323,7 +323,7 @@ function doGamesSearch(int $page, int $pageSize, string $query): array {
       return ['success'=>false,'message'=>'DMZ search failed'];
     }
 
-    // Cache to DB (best-effort)
+    
     try {
       $pdo = getPDO();
       foreach (($dmzRes['items'] ?? []) as $g) {
@@ -349,7 +349,7 @@ function doGamesSearch(int $page, int $pageSize, string $query): array {
   }
 }
 
-/** Main list handler with RECENT window + search + DB→DMZ backfill */
+
 function doGamesList(int $page, int $pageSize, string $query, string $scope = 'recent'): array {
   try {
     $pdo = getPDO();
@@ -384,7 +384,7 @@ function doGamesList(int $page, int $pageSize, string $query, string $scope = 'r
       ];
     }
 
-    // fallback
+  
     list($items, $total, $totalPages) = getGamesPage($pdo, $page, $pageSize, $query);
     return ['success'=>true,'items'=>$items,'page'=>$page,'pageSize'=>$pageSize,'total'=>$total,'totalPages'=>$totalPages,'source'=>'db'];
 
@@ -394,9 +394,9 @@ function doGamesList(int $page, int $pageSize, string $query, string $scope = 'r
   }
 }
 
-/** ===== Game details JSON cache ===== */
+
 function ensureDetailsTable(PDO $pdo): void {
-  // Use BIGINT for rawg_id to match games.rawg_id
+
   $pdo->exec("
     CREATE TABLE IF NOT EXISTS game_details (
       rawg_id BIGINT PRIMARY KEY,
@@ -450,12 +450,12 @@ function doGameDetails(int $id): array {
 
     $item = $dmzRes['item'] ?? [];
 
-    // Cache
+   
     putCachedDetails($pdo, $id, $item);
 
-    // Best-effort upsert to games table for quick list renders later
+   
     if (!empty($item['rawg_id'])) {
-      // Normalize platforms/genres from details format
+    
       $platforms = [];
       if (!empty($item['platforms']) && is_array($item['platforms'])) {
         foreach ($item['platforms'] as $p) {
@@ -487,7 +487,7 @@ function doGameDetails(int $id): array {
   }
 }
 
-/** ===== LIKES (user ↔ rawg_id) ===== */
+
 function likeToggle(string $sessionId, int $rawgId, bool $on): array {
   if ($rawgId <= 0) return ['success'=>false,'message'=>'Invalid rawg id'];
   $userId = resolveUserIdFromSession($sessionId);
@@ -510,7 +510,168 @@ function likeToggle(string $sessionId, int $rawgId, bool $on): array {
   }
 }
 
-/** ===== Like helpers ===== */
+
+function wishlistToggle(string $sessionId, int $rawgId, bool $on): array {
+  if ($rawgId <= 0) return ['success'=>false,'message'=>'Invalid rawg id'];
+  $userId = resolveUserIdFromSession($sessionId);
+  if (!$userId) return ['success'=>false,'message'=>'Unauthorized'];
+
+  try {
+    $pdo = getPDO();
+    if ($on) {
+      $stmt = $pdo->prepare('INSERT IGNORE INTO wishlist_games (user_id, rawg_id) VALUES (?, ?)');
+      $stmt->execute([$userId, $rawgId]);
+      return ['success'=>true,'message'=>'Added to wishlist'];
+    } else {
+      $stmt = $pdo->prepare('DELETE FROM wishlist_games WHERE user_id = ? AND rawg_id = ?');
+      $stmt->execute([$userId, $rawgId]);
+      return ['success'=>true,'message'=>'Removed from wishlist'];
+    }
+  } catch (Throwable $e) {
+    error_log('[wishlistToggle] error: ' . $e->getMessage());
+    return ['success'=>false,'message'=>'Server error'];
+  }
+}
+
+function wishlistList(string $sessionId, int $page = 1, int $pageSize = 24): array {
+  $userId = resolveUserIdFromSession($sessionId);
+  if (!$userId) return ['success'=>false,'message'=>'Unauthorized'];
+
+  $page = max(1,$page);
+  $pageSize = max(1,min(100,$pageSize));
+  $offset = ($page-1)*$pageSize;
+
+  try {
+    $pdo = getPDO();
+
+    $cnt = $pdo->prepare('SELECT COUNT(*) FROM wishlist_games WHERE user_id = ?');
+    $cnt->execute([$userId]);
+    $total = (int)$cnt->fetchColumn();
+
+    $stmt = $pdo->prepare(
+      'SELECT wg.rawg_id,
+              g.name,
+              g.released,
+              g.rating,
+              g.background_image,
+              g.platforms,
+              g.genres
+         FROM wishlist_games wg
+         LEFT JOIN games g ON g.rawg_id = wg.rawg_id
+        WHERE wg.user_id = ?
+        ORDER BY wg.created_at DESC
+        LIMIT ? OFFSET ?'
+    );
+    $stmt->bindValue(1, $userId, PDO::PARAM_INT);
+    $stmt->bindValue(2, $pageSize, PDO::PARAM_INT);
+    $stmt->bindValue(3, $offset,   PDO::PARAM_INT);
+    $stmt->execute();
+
+    $rows = $stmt->fetchAll();
+    $items = [];
+    foreach ($rows as $r) {
+      $items[] = [
+        'id'               => (int)$r['rawg_id'],
+        'rawg_id'          => (int)$r['rawg_id'],
+        'name'             => $r['name'] ?? null,
+        'released'         => $r['released'] ?? null,
+        'rating'           => isset($r['rating']) ? (float)$r['rating'] : null,
+        'background_image' => $r['background_image'] ?? null,
+        'platforms'        => $r['platforms'] ? (json_decode($r['platforms'], true) ?: []) : [],
+        'genres'           => $r['genres'] ? (json_decode($r['genres'], true) ?: []) : [],
+      ];
+    }
+
+    $totalPages = max(1, (int)ceil($total / $pageSize));
+    return ['success'=>true,'items'=>$items,'page'=>$page,'pageSize'=>$pageSize,'total'=>$total,'totalPages'=>$totalPages];
+
+  } catch (Throwable $e) {
+    error_log('[wishlistList] error: ' . $e->getMessage());
+    return ['success'=>false,'message'=>'Server error'];
+  }
+}
+
+
+function playedToggle(string $sessionId, int $rawgId, bool $on): array {
+  if ($rawgId <= 0) return ['success'=>false,'message'=>'Invalid rawg id'];
+  $userId = resolveUserIdFromSession($sessionId);
+  if (!$userId) return ['success'=>false,'message'=>'Unauthorized'];
+
+  try {
+    $pdo = getPDO();
+    if ($on) {
+      $stmt = $pdo->prepare('INSERT IGNORE INTO played_games (user_id, rawg_id) VALUES (?, ?)');
+      $stmt->execute([$userId, $rawgId]);
+      return ['success'=>true,'message'=>'Marked as played'];
+    } else {
+      $stmt = $pdo->prepare('DELETE FROM played_games WHERE user_id = ? AND rawg_id = ?');
+      $stmt->execute([$userId, $rawgId]);
+      return ['success'=>true,'message'=>'Removed from played'];
+    }
+  } catch (Throwable $e) {
+    error_log('[playedToggle] error: ' . $e->getMessage());
+    return ['success'=>false,'message'=>'Server error'];
+  }
+}
+
+function playedList(string $sessionId, int $page = 1, int $pageSize = 24): array {
+  $userId = resolveUserIdFromSession($sessionId);
+  if (!$userId) return ['success'=>false,'message'=>'Unauthorized'];
+
+  $page = max(1,$page);
+  $pageSize = max(1,min(100,$pageSize));
+  $offset = ($page-1)*$pageSize;
+
+  try {
+    $pdo = getPDO();
+
+    $cnt = $pdo->prepare('SELECT COUNT(*) FROM played_games WHERE user_id = ?');
+    $cnt->execute([$userId]);
+    $total = (int)$cnt->fetchColumn();
+
+    $stmt = $pdo->prepare(
+      'SELECT pg.rawg_id,
+              g.name,
+              g.released,
+              g.rating,
+              g.background_image,
+              g.platforms,
+              g.genres
+         FROM played_games pg
+         LEFT JOIN games g ON g.rawg_id = pg.rawg_id
+        WHERE pg.user_id = ?
+        ORDER BY pg.created_at DESC
+        LIMIT ? OFFSET ?'
+    );
+    $stmt->bindValue(1, $userId, PDO::PARAM_INT);
+    $stmt->bindValue(2, $pageSize, PDO::PARAM_INT);
+    $stmt->bindValue(3, $offset,   PDO::PARAM_INT);
+    $stmt->execute();
+
+    $rows = $stmt->fetchAll();
+    $items = [];
+    foreach ($rows as $r) {
+      $items[] = [
+        'id'               => (int)$r['rawg_id'],
+        'rawg_id'          => (int)$r['rawg_id'],
+        'name'             => $r['name'] ?? null,
+        'released'         => $r['released'] ?? null,
+        'rating'           => isset($r['rating']) ? (float)$r['rating'] : null,
+        'background_image' => $r['background_image'] ?? null,
+        'platforms'        => $r['platforms'] ? (json_decode($r['platforms'], true) ?: []) : [],
+        'genres'           => $r['genres'] ? (json_decode($r['genres'], true) ?: []) : [],
+      ];
+    }
+
+    $totalPages = max(1, (int)ceil($total / $pageSize));
+    return ['success'=>true,'items'=>$items,'page'=>$page,'pageSize'=>$pageSize,'total'=>$total,'totalPages'=>$totalPages];
+
+  } catch (Throwable $e) {
+    error_log('[playedList] error: ' . $e->getMessage());
+    return ['success'=>false,'message'=>'Server error'];
+  }
+}
+
 
 function getUserIdBySession(PDO $pdo, string $sessionId): ?int {
   $q = $pdo->prepare('SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.session_key=? AND s.expires_at > NOW() LIMIT 1');
@@ -532,7 +693,7 @@ function ensureLikesTable(PDO $pdo): void {
   ");
 }
 
-/** Toggle like on/off and upsert the game row if we have basic metadata */
+
 function doLikeToggle(string $sessionId, int $rawg_id, int $liked, array $meta = []): array {
   if ($rawg_id <= 0) return ['success'=>false,'message'=>'Invalid rawg_id'];
   try {
@@ -542,7 +703,7 @@ function doLikeToggle(string $sessionId, int $rawg_id, int $liked, array $meta =
     $uid = getUserIdBySession($pdo, $sessionId);
     if (!$uid) return ['success'=>false,'message'=>'Invalid/expired session'];
 
-    // Best-effort cache of game row
+ 
     try {
       $name  = trim((string)($meta['name'] ?? ''));
       $img   = trim((string)($meta['background_image'] ?? ''));
@@ -556,7 +717,7 @@ function doLikeToggle(string $sessionId, int $rawg_id, int $liked, array $meta =
           'released'         => ($rel !== '' ? $rel : null),
           'rating'           => ($rate !== '' ? (float)$rate : null),
           'background_image' => ($img !== '' ? $img : null),
-          'platforms'        => [], // will be filled later by details/search caches
+          'platforms'        => [], 
           'genres'           => [],
         ]);
       }
@@ -578,7 +739,6 @@ function doLikeToggle(string $sessionId, int $rawg_id, int $liked, array $meta =
   }
 }
 
-/** List liked games for the current user (paged) */
 function doLikeList(string $sessionId, int $page, int $pageSize): array {
   try {
     $pdo = getPDO();
@@ -729,6 +889,32 @@ function requestProcessor(array $request) {
       $ps        = (int)($request['pageSize'] ?? 24);
       return likeList($sessionId, $page, $ps);
     }
+    case 'wishlist_toggle': {
+      $sessionId = (string)($request['sessionId'] ?? '');
+      $rawgId    = (int)($request['rawg_id'] ?? 0);
+      $on        = isset($request['on']) ? (bool)$request['on'] : (bool)($request['wanted'] ?? 1);
+      return wishlistToggle($sessionId, $rawgId, $on);
+    }
+    case 'wishlist_list': {
+      $sessionId = (string)($request['sessionId'] ?? '');
+      $page      = (int)($request['page'] ?? 1);
+      $ps        = (int)($request['pageSize'] ?? 24);
+      return wishlistList($sessionId, $page, $ps);
+    }
+
+    case 'played_toggle': {
+      $sessionId = (string)($request['sessionId'] ?? '');
+      $rawgId    = (int)($request['rawg_id'] ?? 0);
+      $on        = isset($request['on']) ? (bool)$request['on'] : (bool)($request['played'] ?? 1);
+      return playedToggle($sessionId, $rawgId, $on);
+    }
+    case 'played_list': {
+      $sessionId = (string)($request['sessionId'] ?? '');
+      $page      = (int)($request['page'] ?? 1);
+      $ps        = (int)($request['pageSize'] ?? 24);
+      return playedList($sessionId, $page, $ps);
+    }
+
 
     default:
       return ['success' => false, 'message' => 'ERROR: unknown type'];
