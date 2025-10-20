@@ -33,6 +33,7 @@ try {
     :root {
       --bg1: #0f0f14; --bg2: #15151f; --card: #1c1c29; --text: #e8e8ff; --muted: #a9a9c1;
       --accent: #7c4dff; --accent-2: #00ffc6; --chip: #2b2b3b; --sidebar-width: 250px;
+      --star-size: 28px; --star-off: #3c4159; --star-glow: rgba(255, 213, 74, .45);
     }
     body {
       background: radial-gradient(1200px 600px at 15% 0%, #18182a 0%, var(--bg1) 60%) fixed,
@@ -62,9 +63,7 @@ try {
       background-color: var(--chip); color: var(--text);
       border-left: 3px solid var(--accent-2); font-weight: 600;
     }
-    .submenu {
-      margin: 4px 0 8px 8px; padding-left: 8px; border-left: 2px solid rgba(124,77,255,0.2);
-    }
+    .submenu { margin: 4px 0 8px 8px; padding-left: 8px; border-left: 2px solid rgba(124,77,255,0.2); }
     .submenu a { padding: 10px 12px; margin-bottom: 4px; }
     .submenu a.active { border-left: 3px solid var(--accent-2); }
 
@@ -96,12 +95,37 @@ try {
     .rating-badge { background: linear-gradient(180deg,#1f1f2f,#181826); border:1px solid rgba(0,255,198,0.45); color: var(--accent-2); font-weight:700; }
     .alert { border-radius:12px; border:1px solid rgba(124,77,255,0.35); background:#141420; color:var(--text); }
 
-    /* Hide inactive sections so they don't push content down */
+    /* Hide inactive sections */
     .content-display { display: none; }
     .content-display.active-section { display: block; }
 
     .detail-actions { display:flex; gap:.5rem; flex-wrap:wrap; margin:.5rem 0 1rem 0; }
     .detail-actions .btn { border-radius:10px; min-width:110px; font-weight:600; }
+
+    /* ===== TRUE half-star fill with glow ===== */
+    .stars { display:inline-flex; position:relative; line-height:1; cursor:pointer; gap: 2px; }
+    .stars button {
+      width: var(--star-size); height: var(--star-size);
+      background: none; border: 0; padding: 0; margin: 0; position: relative;
+    }
+    .star-ico.base {
+      width:100%; height:100%; display:block; color: var(--star-off);
+      filter: drop-shadow(0 0 0 rgba(0,0,0,0));
+      transition: filter .08s ease;
+    }
+    /* Yellow fill sits ON TOP, clipped to a star shape (no small star icon) */
+    .stars .fill {
+      position:absolute; inset:0;
+      background: linear-gradient(90deg, #ffd54a, #ffeb99);
+      width:0%;
+      box-shadow: 0 0 10px var(--star-glow), 0 0 16px var(--star-glow);
+      border-radius: 2px;
+      transition: width .06s linear;
+      /* clip to star shape */
+      mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="black" d="M12 17.27L18.18 21 16.54 13.97 22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>') no-repeat center/contain;
+      -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="black" d="M12 17.27L18.18 21 16.54 13.97 22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>') no-repeat center/contain;
+    }
+    .stars:hover .star-ico.base { filter: drop-shadow(0 0 4px var(--star-glow)); }
   </style>
 </head>
 <body>
@@ -278,7 +302,9 @@ try {
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-// Search + Recent feed with resilient JSON (no auto-initial fetch here)
+/* ===========================
+   Search + Recent feed
+   =========================== */
 (function(){
   const results = document.getElementById('results');
   const status  = document.getElementById('status');
@@ -327,6 +353,14 @@ try {
     fetchGames(currentScope, { append: false });
   }
 
+  function prefRating(g) {
+    if (g.user_rating != null && g.user_rating !== '') return Number(g.user_rating);
+    if (g.userRating != null && g.userRating !== '') return Number(g.userRating);
+    if (g.rating != null && g.rating !== '') return Number(g.rating);
+    return null;
+  }
+  const toName = (x)=> (typeof x === 'string' ? x : (x?.name ?? ''));
+
   async function fetchGames(scope, { append = false } = {}){
     if (isFetching) return;
     if (scope) currentScope = scope;
@@ -366,24 +400,26 @@ try {
       results.innerHTML = '<div class="col-12"><div class="alert">No games found.</div></div>';
       return;
     }
-    const toName = (x)=> (typeof x === 'string' ? x : (x?.name ?? ''));
+
     const cards = items.map(g => {
       const id   = g.id ?? g.rawg_id ?? '';
       const img  = g.background_image || g.image || '';
       const name = g.name || 'Untitled';
-      const rating = (g.rating != null) ? Number(g.rating).toFixed(1) : null;
+      const rating = prefRating(g);
       const released = g.released ? new Date(g.released).toLocaleDateString() : 'Unknown';
       const platforms = (g.platforms || []).slice(0,4).map(p => `<span class="badge badge-chip me-1 mb-1">${toName(p)}</span>`).join('');
       const genres = (g.genres || []).slice(0,3).map(p => `<span class="badge badge-chip me-1 mb-1">${toName(p)}</span>`).join('');
 
       return `
-        <div class="col-12 col-sm-6 col-lg-4">
+        <div class="col-12 col-sm-6 col-lg-4" data-card-id="${id}">
           <div class="game-card h-100">
             ${img ? `<img src="${img}" class="game-img w-100" alt="${name}">` : ''}
             <div class="p-3">
               <div class="d-flex justify-content-between align-items-start mb-1">
                 <h5 class="mb-0">${name}</h5>
-                ${rating !== null ? `<span class="badge rating-badge ms-2">${rating}</span>` : ''}
+                <span class="card-rating">
+                  ${rating != null ? `<span class="badge rating-badge ms-2">${Number(rating).toFixed(1)}</span>` : ''}
+                </span>
               </div>
               <div class="text-secondary small mb-2">Released: ${released}</div>
               ${platforms ? `<div class="mb-2">${platforms}</div>` : ''}
@@ -406,7 +442,7 @@ try {
     });
   }
 
-  // ===== Details modal + Like/Wishlist/Played buttons =====
+  // ===== Details modal + Like/Wishlist/Played + Stars =====
   window.openDetails = function(id){
     const detailsModalEl = document.getElementById('gameDetailsModal');
     const detailsTitleEl = document.getElementById('gdmTitle');
@@ -428,11 +464,15 @@ try {
         const g = (typeof json.item === 'string') ? JSON.parse(json.item) : (json.item || {});
         if (!g || !g.rawg_id) { detailsBodyEl.innerHTML = `<div class="alert alert-warning">No details found for this game.</div>`; return; }
 
-        const pill = (arr)=> (arr && arr.length) ? `<div class="mb-2">${arr.map(x=>`<span class="badge badge-chip me-1 mb-1">${x}</span>`).join('')}</div>` : '';
+        const pill = (arr)=> (arr && arr.length) ? `<div class="mb-2">${arr.map(x=>`<span class="badge badge-chip me-1 mb-1">${(typeof x==='string')?x:(x?.name||x)}</span>`).join('')}</div>` : '';
         const hero = g.background_image_additional || g.background_image || '';
+
+        const avgUser = (g.user_rating != null) ? Number(g.user_rating) :
+                        (g.userRating != null) ? Number(g.userRating) : null;
+
         const infoRows = [
           ['Released', g.released || 'Unknown'],
-          ['Rating', (g.rating!=null ? Number(g.rating).toFixed(1) : '—')],
+          ['Rating (avg)', (avgUser!=null ? avgUser.toFixed(1) : '—')],
           ['Metacritic', (g.metacritic!=null ? g.metacritic : '—')],
           ['Playtime', (g.playtime!=null ? g.playtime+'h' : '—')],
           ['ESRB', g.esrb_rating || '—'],
@@ -474,99 +514,189 @@ try {
             <div class="col-lg-4">
               <h6 class="mb-2">Info</h6>
               ${infoRows}
+
+              <div class="mt-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <strong>Your rating</strong>
+                  <span id="ratingNum">${(g.user_rating_for_user!=null)?Number(g.user_rating_for_user).toFixed(1):'—'}</span>
+                </div>
+                <div id="stars" class="stars" aria-label="Rate this game">
+                  ${[1,2,3,4,5].map(i => `
+                    <button type="button" data-star="${i}" aria-label="${i} star">
+                      <svg class="star-ico base" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 17.27L18.18 21 16.54 13.97 22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                      </svg>
+                      <div class="fill"></div>
+                    </button>
+                  `).join('')}
+                </div>
+                <div class="text-secondary small mt-1">Click to save • half-stars supported</div>
+              </div>
             </div>
           </div>
         `;
 
         // === Action buttons ===
         const actionsWrap = document.getElementById('detailActions');
-        if (!actionsWrap) return;
+        if (actionsWrap) {
+          async function postToggle(url) {
+            const payload = new URLSearchParams();
+            payload.append('action', 'toggle');
+            payload.append('rawg_id', String(g.rawg_id || ''));
+            payload.append('liked', '1');
+            payload.append('name', g.name || '');
+            payload.append('image', g.background_image || g.background_image_additional || '');
+            payload.append('released', g.released || '');
+            const effective = (g.user_rating!=null?g.user_rating:g.rating);
+            payload.append('rating', (effective!=null ? String(effective) : ''));
 
-        // helper to POST toggle
-        async function postToggle(url, meta) {
-          const payload = new URLSearchParams();
-          payload.append('action', 'toggle');
-          payload.append('rawg_id', String(g.rawg_id || ''));
-          payload.append('liked', '1'); // toggle "on"
-          payload.append('name', g.name || '');
-          payload.append('image', g.background_image || g.background_image_additional || '');
-          payload.append('released', g.released || '');
-          payload.append('rating', (g.rating!=null ? String(g.rating) : ''));
-          const r = await fetch(url + '?_=' + Date.now(), {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: payload.toString()
-          });
-          const raw = await r.text();
-          let j = null; try { j = JSON.parse(raw); } catch {}
-          if (!r.ok || !j || j.success === false) throw new Error(raw || 'toggle failed');
+            const r = await fetch(url + '?_=' + Date.now(), {
+              method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+              body: payload.toString()
+            });
+            const raw = await r.text();
+            let j = null; try { j = JSON.parse(raw); } catch {}
+            if (!r.ok || !j || j.success === false) throw new Error(raw || 'toggle failed');
+          }
+
+          const likeBtn = actionsWrap.querySelector('button[data-act="like"]');
+          if (likeBtn) {
+            let busy = false;
+            likeBtn.addEventListener('click', async ()=> {
+              if (busy) return; busy = true;
+              likeBtn.classList.toggle('btn-outline-light'); likeBtn.classList.toggle('btn-light');
+              try {
+                await postToggle('likes.php');
+                if (document.getElementById('liked-content').classList.contains('active-section') && typeof window.loadLikes === 'function') {
+                  window.loadLikes();
+                }
+              } catch (e) {
+                likeBtn.classList.toggle('btn-outline-light'); likeBtn.classList.toggle('btn-light');
+                alert('Failed to update Like.');
+              } finally { busy = false; }
+            });
+          }
+
+          const wishBtn = actionsWrap.querySelector('button[data-act="wishlist"]');
+          if (wishBtn) {
+            let busy = false;
+            wishBtn.addEventListener('click', async ()=> {
+              if (busy) return; busy = true;
+              wishBtn.classList.toggle('btn-outline-light'); wishBtn.classList.toggle('btn-light');
+              try {
+                await postToggle('wishlist.php');
+                if (document.getElementById('wishlist-content').classList.contains('active-section') && typeof window.loadWishlist === 'function') {
+                  window.loadWishlist();
+                }
+              } catch (e) {
+                wishBtn.classList.toggle('btn-outline-light'); wishBtn.classList.toggle('btn-light');
+                alert('Failed to update Wishlist.');
+              } finally { busy = false; }
+            });
+          }
+
+          const playedBtn = actionsWrap.querySelector('button[data-act="played"]');
+          if (playedBtn) {
+            let busy = false;
+            playedBtn.addEventListener('click', async ()=> {
+              if (busy) return; busy = true;
+              playedBtn.classList.toggle('btn-outline-light'); playedBtn.classList.toggle('btn-light');
+              try {
+                await postToggle('played.php');
+                if (document.getElementById('played-content').classList.contains('active-section') && typeof window.loadPlayed === 'function') {
+                  window.loadPlayed();
+                }
+              } catch (e) {
+                playedBtn.classList.toggle('btn-outline-light'); playedBtn.classList.toggle('btn-light');
+                alert('Failed to update Played.');
+              } finally { busy = false; }
+            });
+          }
         }
 
-        // Like
-        const likeBtn = actionsWrap.querySelector('button[data-act="like"]');
-        if (likeBtn) {
-          let busy = false;
-          likeBtn.addEventListener('click', async ()=> {
-            if (busy) return; busy = true;
-            likeBtn.classList.toggle('btn-outline-light');
-            likeBtn.classList.toggle('btn-light');
+        /* ===== Stars (true half fill, glow, save via rating.php) ===== */
+        (function initStars(){
+          const starsWrap = document.getElementById('stars');
+          const ratingNum = document.getElementById('ratingNum');
+          const starBtns  = [...starsWrap.querySelectorAll('button[data-star]')];
+
+          // existing user-specific value if present
+          let current = (g.user_rating_for_user!=null) ? Number(g.user_rating_for_user) : 0;
+
+          function paintValue(v) {
+            starBtns.forEach(btn => {
+              const i = Number(btn.getAttribute('data-star')); // 1..5
+              let fill = Math.max(0, Math.min(1, v - (i - 1))); // 0..1
+              // snap visually to halves
+              if (fill > 0 && fill < 1) fill = (fill >= 0.75 ? 1 : (fill >= 0.25 ? 0.5 : 0));
+              const pct = (fill * 100).toFixed(0) + '%';
+              btn.querySelector('.fill').style.width = pct; // 0%, 50%, 100%
+            });
+          }
+
+          function computeValueFromMouse(ev) {
+            const btn = ev.target.closest('button[data-star]');
+            if (!btn) return current || 0.5;
+            const rect = btn.getBoundingClientRect();
+            const x = ev.clientX - rect.left;
+            const starIdx = Number(btn.getAttribute('data-star')); // 1..5
+            return Math.max(0.5, Math.min(5, starIdx - (x < rect.width/2 ? 0.5 : 0)));
+          }
+
+          paintValue(current);
+          if (ratingNum) ratingNum.textContent = current ? current.toFixed(1) : '—';
+
+          starsWrap.addEventListener('mousemove', (ev)=>{
+            const hoverVal = computeValueFromMouse(ev);
+            paintValue(hoverVal);
+          });
+          starsWrap.addEventListener('mouseleave', ()=>{
+            paintValue(current);
+          });
+          starBtns.forEach(b=>{
+            b.addEventListener('click', async (ev)=>{
+              const chosen = computeValueFromMouse(ev);
+              await saveRating(g.rawg_id, chosen);
+            });
+          });
+
+          async function saveRating(rawgId, value) {
             try {
-              await postToggle('likes.php');
-              if (document.getElementById('liked-content').classList.contains('active-section') && typeof window.loadLikes === 'function') {
-                window.loadLikes();
+              const payload = new URLSearchParams();
+              payload.append('rawg_id', String(rawgId));
+              payload.append('value', String(value));
+              const r = await fetch('rating.php?_=' + Date.now(), {
+                method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: payload.toString()
+              });
+              const raw = await r.text();
+              let j=null; try { j = JSON.parse(raw); } catch {}
+              if (!r.ok || !j || j.success === false) throw new Error(j?.message || raw || 'Save failed');
+
+              current = j.user_value ? Number(j.user_value) : value;
+              paintValue(current);
+              if (ratingNum) ratingNum.textContent = current.toFixed(1);
+
+              // Update “Rating (avg)” row (if avg returned)
+              if (j.avg != null) {
+                const rows = document.querySelectorAll('#gdmBody .col-lg-4 .d-flex');
+                rows.forEach(row=>{
+                  const label = row.firstChild?.textContent?.trim();
+                  if (label === 'Rating (avg)') row.lastChild.innerHTML = Number(j.avg).toFixed(1);
+                });
+              }
+
+              // Update any visible card badge (prefer avg if provided)
+              const card = document.querySelector(`[data-card-id="${rawgId}"] .card-rating`);
+              if (card) {
+                const val = (j.avg != null ? Number(j.avg) : current);
+                card.innerHTML = `<span class="badge rating-badge ms-2">${val.toFixed(1)}</span>`;
               }
             } catch (e) {
-              console.error('likes toggle failed', e);
-              likeBtn.classList.toggle('btn-outline-light');
-              likeBtn.classList.toggle('btn-light');
-              alert('Failed to update Like.');
-            } finally { busy = false; }
-          });
-        }
-
-        // Wishlist
-        const wishBtn = actionsWrap.querySelector('button[data-act="wishlist"]');
-        if (wishBtn) {
-          let busy = false;
-          wishBtn.addEventListener('click', async ()=> {
-            if (busy) return; busy = true;
-            wishBtn.classList.toggle('btn-outline-light');
-            wishBtn.classList.toggle('btn-light');
-            try {
-              await postToggle('wishlist.php');
-              if (document.getElementById('wishlist-content').classList.contains('active-section') && typeof window.loadWishlist === 'function') {
-                window.loadWishlist();
-              }
-            } catch (e) {
-              console.error('wishlist toggle failed', e);
-              wishBtn.classList.toggle('btn-outline-light');
-              wishBtn.classList.toggle('btn-light');
-              alert('Failed to update Wishlist.');
-            } finally { busy = false; }
-          });
-        }
-
-        // Played
-        const playedBtn = actionsWrap.querySelector('button[data-act="played"]');
-        if (playedBtn) {
-          let busy = false;
-          playedBtn.addEventListener('click', async ()=> {
-            if (busy) return; busy = true;
-            playedBtn.classList.toggle('btn-outline-light');
-            playedBtn.classList.toggle('btn-light');
-            try {
-              await postToggle('played.php');
-              if (document.getElementById('played-content').classList.contains('active-section') && typeof window.loadPlayed === 'function') {
-                window.loadPlayed();
-              }
-            } catch (e) {
-              console.error('played toggle failed', e);
-              playedBtn.classList.toggle('btn-outline-light');
-              playedBtn.classList.toggle('btn-light');
-              alert('Failed to update Played.');
-            } finally { busy = false; }
-          });
-        }
+              console.error('rating save error', e);
+              alert('Failed to save rating.');
+            }
+          }
+        })();
       })
       .catch(err=>{ console.error('fetch game.php failed:', err); detailsBodyEl.innerHTML = `<div class="alert alert-danger">Network error.</div>`; });
   }
@@ -582,7 +712,7 @@ try {
 </script>
 
 <script>
-// ===== Liked list loader/render =====
+/* ===== Liked list loader/render ===== */
 (function(){
   const likedList   = document.getElementById('likedList');
   const likedStatus = document.getElementById('likedStatus');
@@ -594,6 +724,13 @@ try {
     likedStatus.classList.remove('d-none');
   }
   function clearLikedStatus(){ likedStatus.classList.add('d-none'); }
+
+  function prefRating(g) {
+    if (g.user_rating != null && g.user_rating !== '') return Number(g.user_rating);
+    if (g.userRating != null && g.userRating !== '') return Number(g.userRating);
+    if (g.rating != null && g.rating !== '') return Number(g.rating);
+    return null;
+  }
 
   async function loadLikes() {
     if (!likedList) return;
@@ -621,23 +758,26 @@ try {
       likedList.innerHTML = '<div class="col-12"><div class="alert">No liked games yet.</div></div>';
       return;
     }
+    const toName = (x)=> (typeof x === 'string' ? x : (x?.name ?? ''));
     likedList.innerHTML = items.map(g => {
       const id   = g.rawg_id ?? g.id ?? '';
       const img  = g.background_image || g.image || '';
       const name = g.name || 'Untitled';
-      const rating = (g.rating != null && g.rating !== '') ? Number(g.rating).toFixed(1) : null;
+      const rating = prefRating(g);
       const released = g.released ? new Date(g.released).toLocaleDateString() : 'Unknown';
-      const platforms = (g.platforms || []).slice(0,4).map(p => `<span class="badge badge-chip me-1 mb-1">${(typeof p==='string')?p:(p?.name||'')}</span>`).join('');
-      const genres = (g.genres || []).slice(0,3).map(p => `<span class="badge badge-chip me-1 mb-1">${(typeof p==='string')?p:(p?.name||'')}</span>`).join('');
+      const platforms = (g.platforms || []).slice(0,4).map(p => `<span class="badge badge-chip me-1 mb-1">${toName(p)}</span>`).join('');
+      const genres = (g.genres || []).slice(0,3).map(p => `<span class="badge badge-chip me-1 mb-1">${toName(p)}</span>`).join('');
 
       return `
-        <div class="col-12 col-sm-6 col-lg-4">
+        <div class="col-12 col-sm-6 col-lg-4" data-card-id="${id}">
           <div class="game-card h-100">
             ${img ? `<img src="${img}" class="game-img w-100" alt="${name}">` : ''}
             <div class="p-3">
               <div class="d-flex justify-content-between align-items-start mb-1">
                 <h5 class="mb-0">${name}</h5>
-                ${rating !== null ? `<span class="badge rating-badge ms-2">${rating}</span>` : ''}
+                <span class="card-rating">
+                  ${rating != null ? `<span class="badge rating-badge ms-2">${Number(rating).toFixed(1)}</span>` : ''}
+                </span>
               </div>
               <div class="text-secondary small mb-2">Released: ${released}</div>
               ${platforms ? `<div class="mb-2">${platforms}</div>` : ''}
@@ -658,7 +798,7 @@ try {
 </script>
 
 <script>
-// ===== Wishlist list loader/render =====
+/* ===== Wishlist list loader/render ===== */
 (function(){
   const listEl   = document.getElementById('wishlistList');
   const statusEl = document.getElementById('wishlistStatus');
@@ -670,6 +810,13 @@ try {
     statusEl.classList.remove('d-none');
   }
   function clearStatus(){ statusEl.classList.add('d-none'); }
+
+  function prefRating(g) {
+    if (g.user_rating != null && g.user_rating !== '') return Number(g.user_rating);
+    if (g.userRating != null && g.userRating !== '') return Number(g.userRating);
+    if (g.rating != null && g.rating !== '') return Number(g.rating);
+    return null;
+  }
 
   async function loadWishlist() {
     if (!listEl) return;
@@ -696,22 +843,25 @@ try {
       listEl.innerHTML = '<div class="col-12"><div class="alert">No wishlist items yet.</div></div>';
       return;
     }
+    const toName = x => (typeof x==='string'?x:(x?.name||''));
     listEl.innerHTML = items.map(g => {
       const id   = g.rawg_id ?? g.id ?? '';
       const img  = g.background_image || g.image || '';
       const name = g.name || 'Untitled';
-      const rating = (g.rating != null && g.rating !== '') ? Number(g.rating).toFixed(1) : null;
+      const rating = prefRating(g);
       const released = g.released ? new Date(g.released).toLocaleDateString() : 'Unknown';
-      const platforms = (g.platforms || []).slice(0,4).map(p => `<span class="badge badge-chip me-1 mb-1">${(typeof p==='string')?p:(p?.name||'')}</span>`).join('');
-      const genres = (g.genres || []).slice(0,3).map(p => `<span class="badge badge-chip me-1 mb-1">${(typeof p==='string')?p:(p?.name||'')}</span>`).join('');
+      const platforms = (g.platforms || []).slice(0,4).map(p => `<span class="badge badge-chip me-1 mb-1">${toName(p)}</span>`).join('');
+      const genres = (g.genres || []).slice(0,3).map(p => `<span class="badge badge-chip me-1 mb-1">${toName(p)}</span>`).join('');
       return `
-        <div class="col-12 col-sm-6 col-lg-4">
+        <div class="col-12 col-sm-6 col-lg-4" data-card-id="${id}">
           <div class="game-card h-100">
             ${img ? `<img src="${img}" class="game-img w-100" alt="${name}">` : ''}
             <div class="p-3">
               <div class="d-flex justify-content-between align-items-start mb-1">
                 <h5 class="mb-0">${name}</h5>
-                ${rating !== null ? `<span class="badge rating-badge ms-2">${rating}</span>` : ''}
+                <span class="card-rating">
+                  ${rating != null ? `<span class="badge rating-badge ms-2">${Number(rating).toFixed(1)}</span>` : ''}
+                </span>
               </div>
               <div class="text-secondary small mb-2">Released: ${released}</div>
               ${platforms ? `<div class="mb-2">${platforms}</div>` : ''}
@@ -732,7 +882,7 @@ try {
 </script>
 
 <script>
-// ===== Played list loader/render =====
+/* ===== Played list loader/render ===== */
 (function(){
   const listEl   = document.getElementById('playedList');
   const statusEl = document.getElementById('playedStatus');
@@ -744,6 +894,13 @@ try {
     statusEl.classList.remove('d-none');
   }
   function clearStatus(){ statusEl.classList.add('d-none'); }
+
+  function prefRating(g) {
+    if (g.user_rating != null && g.user_rating !== '') return Number(g.user_rating);
+    if (g.userRating != null && g.userRating !== '') return Number(g.userRating);
+    if (g.rating != null && g.rating !== '') return Number(g.rating);
+    return null;
+  }
 
   async function loadPlayed() {
     if (!listEl) return;
@@ -770,22 +927,25 @@ try {
       listEl.innerHTML = '<div class="col-12"><div class="alert">No played games yet.</div></div>';
       return;
     }
+    const toName = x => (typeof x==='string'?x:(x?.name||''));
     listEl.innerHTML = items.map(g => {
       const id   = g.rawg_id ?? g.id ?? '';
       const img  = g.background_image || g.image || '';
       const name = g.name || 'Untitled';
-      const rating = (g.rating != null && g.rating !== '') ? Number(g.rating).toFixed(1) : null;
+      const rating = prefRating(g);
       const released = g.released ? new Date(g.released).toLocaleDateString() : 'Unknown';
-      const platforms = (g.platforms || []).slice(0,4).map(p => `<span class="badge badge-chip me-1 mb-1">${(typeof p==='string')?p:(p?.name||'')}</span>`).join('');
-      const genres = (g.genres || []).slice(0,3).map(p => `<span class="badge badge-chip me-1 mb-1">${(typeof p==='string')?p:(p?.name||'')}</span>`).join('');
+      const platforms = (g.platforms || []).slice(0,4).map(p => `<span class="badge badge-chip me-1 mb-1">${toName(p)}</span>`).join('');
+      const genres = (g.genres || []).slice(0,3).map(p => `<span class="badge badge-chip me-1 mb-1">${toName(p)}</span>`).join('');
       return `
-        <div class="col-12 col-sm-6 col-lg-4">
+        <div class="col-12 col-sm-6 col-lg-4" data-card-id="${id}">
           <div class="game-card h-100">
             ${img ? `<img src="${img}" class="game-img w-100" alt="${name}">` : ''}
             <div class="p-3">
               <div class="d-flex justify-content-between align-items-start mb-1">
                 <h5 class="mb-0">${name}</h5>
-                ${rating !== null ? `<span class="badge rating-badge ms-2">${rating}</span>` : ''}
+                <span class="card-rating">
+                  ${rating != null ? `<span class="badge rating-badge ms-2">${Number(rating).toFixed(1)}</span>` : ''}
+                </span>
               </div>
               <div class="text-secondary small mb-2">Released: ${released}</div>
               ${platforms ? `<div class="mb-2">${platforms}</div>` : ''}
@@ -806,7 +966,7 @@ try {
 </script>
 
 <script>
-// Sidebar routing + single-init (brand/home triggers only one fetch)
+/* Sidebar routing + single-init */
 document.addEventListener('DOMContentLoaded', () => {
   const nav = document.getElementById('sidebarNav');
   const sections = document.querySelectorAll('.content-display');
@@ -863,7 +1023,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Initial section: URL param, else saved, else Home — triggers ONE fetch
+  // Initial section
   const urlSection = sectionFromQuery();
   const saved = localStorage.getItem('activeSection');
   if (urlSection && document.getElementById(urlSection)) showSection(urlSection);
@@ -873,7 +1033,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 <script>
-// forum comments (local only)
+/* forum comments (local only) */
 document.addEventListener('DOMContentLoaded', () => {
   const header = document.getElementById('forum-comment-header');
   const container = document.getElementById('forum-comment-container');
