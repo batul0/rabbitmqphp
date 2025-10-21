@@ -939,13 +939,14 @@ function forumGet(int $forumId, int $page = 1, int $pageSize = 50): array {
     $total = (int)$cnt->fetchColumn();
 
     $m = $pdo->prepare("
-      SELECT m.id, m.message, m.created_at, u.username
+      SELECT m.id, m.message, m.created_at, m.parent_id, u.username
         FROM forum_messages m
         JOIN users u ON u.id = m.user_id
-       WHERE m.forum_id = ?
-       ORDER BY m.created_at ASC
-       LIMIT ? OFFSET ?
-    ");
+      WHERE m.forum_id = ?
+      ORDER BY m.created_at ASC
+      LIMIT ? OFFSET ?
+      ");
+
     $m->bindValue(1, $forumId, PDO::PARAM_INT);
     $m->bindValue(2, $pageSize, PDO::PARAM_INT);
     $m->bindValue(3, $offset, PDO::PARAM_INT);
