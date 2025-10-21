@@ -959,6 +959,7 @@ function forumGet(int $forumId, int $page = 1, int $pageSize = 50): array {
         'username' => $row['username'],
         'message' => $row['message'],
         'created_at' => $row['created_at'],
+        'parent_id'  => isset($row['parent_id']) ? (int)$row['parent_id'] : null,
       ];
     }
     $totalPages = max(1, (int)ceil($total / $pageSize));
@@ -1119,8 +1120,10 @@ function requestProcessor(array $request) {
       $sessionId = (string)($request['sessionId'] ?? '');
       $forumId   = (int)($request['forum_id'] ?? 0);
       $message   = (string)($request['message'] ?? '');
-      return forumPostMessage($sessionId, $forumId, $message);
-    }
+      $parentId  = isset($request['parent_id']) ? (int)$request['parent_id'] : null;
+      return forumPostMessage($sessionId, $forumId, $message, $parentId);
+}
+
 
     default:
       return ['success' => false, 'message' => 'ERROR: unknown type'];
