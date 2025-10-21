@@ -25,6 +25,7 @@ function getPDO(): PDO {
   return new PDO($dsn, DB_USER, DB_PASS, $options);
 }
 
+/* ===== Auth ===== */
 
 function doLogin(string $username, string $password): array {
   if ($username === '' || $password === '') {
@@ -41,11 +42,13 @@ function doLogin(string $username, string $password): array {
     if ($hash === '' || !password_verify($password, $hash)) {
       return ['success' => false, 'message' => 'Invalid credentials'];
     }
+
     if (password_needs_rehash($hash, PASSWORD_DEFAULT)) {
       $newHash = password_hash($password, PASSWORD_DEFAULT);
       $upd = $pdo->prepare('UPDATE users SET password = ? WHERE id = ?');
       $upd->execute([$newHash, $row['id']]);
     }
+
     $key = bin2hex(random_bytes(32));
     $exp = (new DateTime('+7 days'))->format('Y-m-d H:i:s');
     $ins = $pdo->prepare('INSERT INTO sessions (user_id, session_key, expires_at) VALUES (?,?,?)');
@@ -57,6 +60,7 @@ function doLogin(string $username, string $password): array {
     return ['success' => false, 'message' => 'Server error'];
   }
 }
+
 function doRegister(string $username, string $password): array {
   $username = trim($username);
   $password = (string)$password;
@@ -83,6 +87,7 @@ function doRegister(string $username, string $password): array {
     return ['success' => false, 'message' => 'Server error'];
   }
 }
+
 function resolveUserIdFromSession(string $sessionId): ?int {
   $sessionId = trim($sessionId);
   if ($sessionId === '') return null;
@@ -103,6 +108,7 @@ function resolveUserIdFromSession(string $sessionId): ?int {
     return null;
   }
 }
+
 function doValidate(string $sessionId): array {
   $sessionId = trim($sessionId);
   if ($sessionId === '') return ['success' => false, 'message' => 'No session'];
@@ -122,6 +128,7 @@ function doValidate(string $sessionId): array {
     return ['success' => false, 'message' => 'Server error'];
   }
 }
+
 function doLogout(string $sessionId): array {
   $sessionId = trim($sessionId);
   if ($sessionId === '') return ['success' => false, 'message' => 'No session'];
@@ -136,13 +143,7 @@ function doLogout(string $sessionId): array {
   }
 }
 
-
-function ensureGamesHasUserRating(PDO $pdo): void {
-  try {
-    $pdo->exec("ALTER TABLE games ADD COLUMN user_rating DECIMAL(3,1) NULL DEFAULT NULL");
-  } catch (Throwable $e) {
-  }
-}
+/* ===== Games catalog helpers ===== */
 
 function upsertGame(PDO $pdo, array $g): void {
   $stmt = $pdo->prepare(
@@ -179,7 +180,6 @@ function upsertGame(PDO $pdo, array $g): void {
     ':genres'=> json_encode($genreNames, JSON_UNESCAPED_UNICODE),
   ]);
 }
-
 
 function getGamesPageByDates(PDO $pdo, int $page, int $pageSize, string $from, string $to): array {
   $page     = max(1, $page);
@@ -220,6 +220,7 @@ function getGamesPageByDates(PDO $pdo, int $page, int $pageSize, string $from, s
   $totalPages = max(1, (int)ceil($total / $pageSize));
   return [$items, $total, $totalPages];
 }
+
 function getGamesPage(PDO $pdo, int $page, int $pageSize, string $query): array {
   $page     = max(1, $page);
   $pageSize = max(1, min(50, $pageSize));
@@ -263,7 +264,7 @@ function getGamesPage(PDO $pdo, int $page, int $pageSize, string $query): array 
   return [$items, $total, $totalPages];
 }
 
-
+/* Backfill recent window by asking DMZ (no schema changes here) */
 function backfillRecentWindow(PDO $pdo, int $needUpToPage, int $pageSize, string $from, string $to): void {
   $MAX_ROUNDS = 6; $round = 0;
 
@@ -301,6 +302,7 @@ function backfillRecentWindow(PDO $pdo, int $needUpToPage, int $pageSize, string
   }
 }
 
+/* ===== Public game endpoints ===== */
 
 function doGamesSearch(int $page, int $pageSize, string $query): array {
   $query = trim($query);
@@ -322,10 +324,9 @@ function doGamesSearch(int $page, int $pageSize, string $query): array {
 
     $items = $dmzRes['items'] ?? [];
 
-  
+    /* best-effort DB enrich (no schema changes) */
     try {
       $pdo = getPDO();
-      ensureGamesHasUserRating($pdo);
       foreach ($items as $g) {
         if (!empty($g['rawg_id'])) upsertGame($pdo, $g);
       }
@@ -368,7 +369,6 @@ function doGamesSearch(int $page, int $pageSize, string $query): array {
 function doGamesList(int $page, int $pageSize, string $query, string $scope = 'recent'): array {
   try {
     $pdo = getPDO();
-    ensureGamesHasUserRating($pdo);
 
     $page     = max(1, $page);
     $pageSize = max(1, min(50, $pageSize));
@@ -410,20 +410,17 @@ function doGamesList(int $page, int $pageSize, string $query, string $scope = 'r
   }
 }
 
-/* ===== Details cache ===== */
-function ensureDetailsTable(PDO $pdo): void {
-  $pdo->exec("
-    CREATE TABLE IF NOT EXISTS game_details (
-      rawg_id BIGINT PRIMARY KEY,
-      details_json LONGTEXT NOT NULL,
-      updated_at DATETIME NOT NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  ");
-}
+/* ===== Details cache (optional; no CREATE TABLE) ===== */
+
 function getCachedDetails(PDO $pdo, int $id, int $maxAgeMinutes = 10080): ?array {
-  ensureDetailsTable($pdo);
-  $stmt = $pdo->prepare("SELECT details_json, updated_at FROM game_details WHERE rawg_id = ? LIMIT 1");
-  $stmt->execute([$id]);
+  try {
+    $stmt = $pdo->prepare("SELECT details_json, updated_at FROM game_details WHERE rawg_id = ? LIMIT 1");
+    $stmt->execute([$id]);
+  } catch (Throwable $e) {
+    // table might not exist — treat as cache miss
+    return null;
+  }
+
   $row = $stmt->fetch();
   if (!$row) return null;
 
@@ -434,15 +431,21 @@ function getCachedDetails(PDO $pdo, int $id, int $maxAgeMinutes = 10080): ?array
   $json = json_decode($row['details_json'], true);
   return is_array($json) ? $json : null;
 }
+
 function putCachedDetails(PDO $pdo, int $id, array $payload): void {
-  ensureDetailsTable($pdo);
-  $stmt = $pdo->prepare("
-    INSERT INTO game_details (rawg_id, details_json, updated_at)
-    VALUES (?, ?, NOW())
-    ON DUPLICATE KEY UPDATE details_json = VALUES(details_json), updated_at = NOW()
-  ");
-  $stmt->execute([$id, json_encode($payload, JSON_UNESCAPED_UNICODE)]);
+  try {
+    $stmt = $pdo->prepare("
+      INSERT INTO game_details (rawg_id, details_json, updated_at)
+      VALUES (?, ?, NOW())
+      ON DUPLICATE KEY UPDATE details_json = VALUES(details_json), updated_at = NOW()
+    ");
+    $stmt->execute([$id, json_encode($payload, JSON_UNESCAPED_UNICODE)]);
+  } catch (Throwable $e) {
+    // cache is optional
+    error_log('[putCachedDetails] warn: '.$e->getMessage());
+  }
 }
+
 function doGameDetails(int $id): array {
   if ($id <= 0) return ['success'=>false,'message'=>'Invalid game id'];
   try {
@@ -462,10 +465,8 @@ function doGameDetails(int $id): array {
 
     $item = $dmzRes['item'] ?? [];
 
-  
     putCachedDetails($pdo, $id, $item);
 
- 
     if (!empty($item['rawg_id'])) {
       $platforms = [];
       if (!empty($item['platforms']) && is_array($item['platforms'])) {
@@ -498,6 +499,7 @@ function doGameDetails(int $id): array {
   }
 }
 
+/* ===== Likes / Wishlist / Played ===== */
 
 function likeToggle(string $sessionId, int $rawgId, bool $on): array {
   if ($rawgId <= 0) return ['success'=>false,'message'=>'Invalid rawg id'];
@@ -520,6 +522,7 @@ function likeToggle(string $sessionId, int $rawgId, bool $on): array {
     return ['success'=>false,'message'=>'Server error'];
   }
 }
+
 function wishlistToggle(string $sessionId, int $rawgId, bool $on): array {
   if ($rawgId <= 0) return ['success'=>false,'message'=>'Invalid rawg id'];
   $userId = resolveUserIdFromSession($sessionId);
@@ -541,6 +544,7 @@ function wishlistToggle(string $sessionId, int $rawgId, bool $on): array {
     return ['success'=>false,'message'=>'Server error'];
   }
 }
+
 function playedToggle(string $sessionId, int $rawgId, bool $on): array {
   if ($rawgId <= 0) return ['success'=>false,'message'=>'Invalid rawg id'];
   $userId = resolveUserIdFromSession($sessionId);
@@ -563,6 +567,7 @@ function playedToggle(string $sessionId, int $rawgId, bool $on): array {
   }
 }
 
+/* Lists: avoid relying on created_at columns */
 
 function likeList(string $sessionId, int $page = 1, int $pageSize = 24): array {
   $userId = resolveUserIdFromSession($sessionId);
@@ -590,7 +595,7 @@ function likeList(string $sessionId, int $page = 1, int $pageSize = 24): array {
          FROM liked_games lg
          LEFT JOIN games g ON g.rawg_id = lg.rawg_id
         WHERE lg.user_id = ?
-        ORDER BY lg.created_at DESC
+        ORDER BY COALESCE(g.name, \'\') ASC, lg.rawg_id DESC
         LIMIT ? OFFSET ?'
     );
     $stmt->bindValue(1, $userId, PDO::PARAM_INT);
@@ -650,7 +655,7 @@ function wishlistList(string $sessionId, int $page = 1, int $pageSize = 24): arr
          FROM wishlist_games wg
          LEFT JOIN games g ON g.rawg_id = wg.rawg_id
         WHERE wg.user_id = ?
-        ORDER BY wg.created_at DESC
+        ORDER BY COALESCE(g.name, \'\') ASC, wg.rawg_id DESC
         LIMIT ? OFFSET ?'
     );
     $stmt->bindValue(1, $userId, PDO::PARAM_INT);
@@ -710,7 +715,7 @@ function playedList(string $sessionId, int $page = 1, int $pageSize = 24): array
          FROM played_games pg
          LEFT JOIN games g ON g.rawg_id = pg.rawg_id
         WHERE pg.user_id = ?
-        ORDER BY pg.created_at DESC
+        ORDER BY COALESCE(g.name, \'\') ASC, pg.rawg_id DESC
         LIMIT ? OFFSET ?'
     );
     $stmt->bindValue(1, $userId, PDO::PARAM_INT);
@@ -743,26 +748,7 @@ function playedList(string $sessionId, int $page = 1, int $pageSize = 24): array
   }
 }
 
-
-function ensureRatingsTable(PDO $pdo): void {
- 
-  $pdo->exec("
-    CREATE TABLE IF NOT EXISTS ratings (
-      user_id    INT NOT NULL,
-      rawg_id    BIGINT UNSIGNED NOT NULL,
-      value      DECIMAL(3,1) NOT NULL,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (user_id, rawg_id),
-      INDEX idx_ratings_rawg (rawg_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  ");
- 
-  try {
-    $pdo->exec("ALTER TABLE ratings ADD CONSTRAINT fk_ratings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE");
-  } catch (Throwable $e) {
- 
-  }
-}
+/* ===== Ratings (no schema changes) ===== */
 
 function doRatingSet(string $sessionId, int $rawgId, float $value): array {
   if ($rawgId <= 0 || $value < 0.5 || $value > 5.0) {
@@ -770,29 +756,28 @@ function doRatingSet(string $sessionId, int $rawgId, float $value): array {
   }
   try {
     $pdo = getPDO();
-    ensureRatingsTable($pdo);
-    ensureGamesHasUserRating($pdo);
 
     $uid = resolveUserIdFromSession($sessionId);
     if (!$uid) return ['success'=>false,'message'=>'Invalid/expired session'];
 
-   
     $stmt = $pdo->prepare("
       INSERT INTO ratings (user_id, rawg_id, value) VALUES (?, ?, ?)
       ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = CURRENT_TIMESTAMP
     ");
     $stmt->execute([$uid, $rawgId, $value]);
 
-
     $avg = (float)$pdo->query("SELECT ROUND(AVG(value),1) FROM ratings WHERE rawg_id = ".((int)$rawgId))->fetchColumn();
 
-   
-    $upg = $pdo->prepare("UPDATE games SET user_rating = ? WHERE rawg_id = ?");
-    $upg->execute([$avg, $rawgId]);
-
-    
+    // Best-effort: update games.user_rating if column exists
     try {
-      ensureDetailsTable($pdo);
+      $upg = $pdo->prepare("UPDATE games SET user_rating = ? WHERE rawg_id = ?");
+      $upg->execute([$avg, $rawgId]);
+    } catch (Throwable $e) {
+      error_log('[doRatingSet] user_rating update warn: '.$e->getMessage());
+    }
+
+    // Best-effort: also reflect in cached details if table exists
+    try {
       $q = $pdo->prepare("SELECT details_json FROM game_details WHERE rawg_id = ? LIMIT 1");
       $q->execute([$rawgId]);
       if ($row = $q->fetch()) {
@@ -818,119 +803,7 @@ function doRatingSet(string $sessionId, int $rawgId, float $value): array {
   }
 }
 
-
-function ensureLikesTable(PDO $pdo): void {
-  $pdo->exec("
-    CREATE TABLE IF NOT EXISTS liked_games (
-      user_id  INT NOT NULL,
-      rawg_id  BIGINT UNSIGNED NOT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (user_id, rawg_id),
-      INDEX idx_liked_rawg (rawg_id),
-      CONSTRAINT fk_liked_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-  ");
-}
-function getUserIdBySession(PDO $pdo, string $sessionId): ?int {
-  $q = $pdo->prepare('SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.session_key=? AND s.expires_at > NOW() LIMIT 1');
-  $q->execute([$sessionId]);
-  $uid = $q->fetchColumn();
-  return $uid ? (int)$uid : null;
-}
-function doLikeToggle(string $sessionId, int $rawg_id, int $liked, array $meta = []): array {
-  if ($rawg_id <= 0) return ['success'=>false,'message'=>'Invalid rawg_id'];
-  try {
-    $pdo = getPDO();
-    ensureLikesTable($pdo);
-
-    $uid = getUserIdBySession($pdo, $sessionId);
-    if (!$uid) return ['success'=>false,'message'=>'Invalid/expired session'];
-
-    try {
-      $name  = trim((string)($meta['name'] ?? ''));
-      $img   = trim((string)($meta['background_image'] ?? ''));
-      $rel   = trim((string)($meta['released'] ?? ''));
-      $rate  = $meta['rating'] ?? null;
-
-      if ($name !== '' || $img !== '' || $rel !== '' || $rate !== null) {
-        upsertGame($pdo, [
-          'rawg_id'          => $rawg_id,
-          'name'             => $name,
-          'released'         => ($rel !== '' ? $rel : null),
-          'rating'           => ($rate !== '' ? (float)$rate : null),
-          'background_image' => ($img !== '' ? $img : null),
-          'platforms'        => [],
-          'genres'           => [],
-        ]);
-      }
-    } catch (Throwable $e) {
-      error_log('[doLikeToggle] upsertGame warn: '.$e->getMessage());
-    }
-
-    if ($liked) {
-      $ins = $pdo->prepare('INSERT IGNORE INTO liked_games (user_id, rawg_id) VALUES (?, ?)');
-      $ins->execute([$uid, $rawg_id]);
-    } else {
-      $del = $pdo->prepare('DELETE FROM liked_games WHERE user_id = ? AND rawg_id = ?');
-      $del->execute([$uid, $rawg_id]);
-    }
-    return ['success'=>true, 'liked'=>$liked ? 1 : 0];
-  } catch (Throwable $e) {
-    error_log('[doLikeToggle] error: '.$e->getMessage());
-    return ['success'=>false,'message'=>'Server error'];
-  }
-}
-function doLikeList(string $sessionId, int $page, int $pageSize): array {
-  try {
-    $pdo = getPDO();
-    ensureLikesTable($pdo);
-
-    $uid = getUserIdBySession($pdo, $sessionId);
-    if (!$uid) return ['success'=>false,'message'=>'Invalid/expired session'];
-
-    $page     = max(1, $page);
-    $pageSize = max(1, min(60, $pageSize));
-    $offset   = ($page - 1) * $pageSize;
-
-    $cnt = $pdo->prepare('SELECT COUNT(*) FROM liked_games WHERE user_id = ?');
-    $cnt->execute([$uid]);
-    $total = (int)$cnt->fetchColumn();
-
-    $stmt = $pdo->prepare("
-      SELECT g.rawg_id, g.name, g.released, g.rating, g.user_rating, g.background_image, g.platforms, g.genres
-      FROM liked_games lg
-      LEFT JOIN games g ON g.rawg_id = lg.rawg_id
-      WHERE lg.user_id = ?
-      ORDER BY COALESCE(g.name, '') ASC
-      LIMIT ? OFFSET ?
-    ");
-    $stmt->bindValue(1, $uid, PDO::PARAM_INT);
-    $stmt->bindValue(2, $pageSize, PDO::PARAM_INT);
-    $stmt->bindValue(3, $offset, PDO::PARAM_INT);
-    $stmt->execute();
-
-    $rows = $stmt->fetchAll();
-    $items = [];
-    foreach ($rows as $r) {
-      $items[] = [
-        'id'               => isset($r['rawg_id']) ? (int)$r['rawg_id'] : null,
-        'rawg_id'          => isset($r['rawg_id']) ? (int)$r['rawg_id'] : null,
-        'name'             => $r['name'] ?? 'Untitled',
-        'released'         => $r['released'] ?? null,
-        'rating'           => is_null($r['rating']) ? null : (float)$r['rating'],
-        'user_rating'      => isset($r['user_rating']) ? (float)$r['user_rating'] : null,
-        'background_image' => $r['background_image'] ?? null,
-        'platforms'        => json_decode($r['platforms'] ?? '[]', true) ?: [],
-        'genres'           => json_decode($r['genres'] ?? '[]', true) ?: [],
-      ];
-    }
-    $totalPages = max(1, (int)ceil($total / $pageSize));
-    return ['success'=>true, 'items'=>$items, 'page'=>$page, 'pageSize'=>$pageSize, 'total'=>$total, 'totalPages'=>$totalPages];
-  } catch (Throwable $e) {
-    error_log('[doLikeList] error: '.$e->getMessage());
-    return ['success'=>false,'message'=>'Server error'];
-  }
-}
+/* ===== Forums (no ensure functions; assume tables exist) ===== */
 
 function forumCreate(string $sessionId, int $rawgId, string $title, string $description): array {
   $title = trim($title);
@@ -940,7 +813,6 @@ function forumCreate(string $sessionId, int $rawgId, string $title, string $desc
   }
   try {
     $pdo = getPDO();
-    ensureForumsTables($pdo);
 
     $uid = resolveUserIdFromSession($sessionId);
     if (!$uid) return ['success'=>false,'message'=>'Invalid/expired session'];
@@ -950,7 +822,6 @@ function forumCreate(string $sessionId, int $rawgId, string $title, string $desc
       $gq = $pdo->prepare('SELECT 1 FROM games WHERE rawg_id = ?');
       $gq->execute([$rawgId]);
       if (!$gq->fetchColumn()) {
-        // insert stub game row so FK-less join still has data later
         upsertGame($pdo, ['rawg_id'=>$rawgId, 'name'=>'', 'background_image'=>null, 'platforms'=>[], 'genres'=>[]]);
       }
     } catch (Throwable $e) { /* ignore */ }
@@ -982,7 +853,6 @@ function forumList(int $page = 1, int $pageSize = 24, ?int $rawgId = null): arra
 
   try {
     $pdo = getPDO();
-    ensureForumsTables($pdo);
 
     if ($rawgId) {
       $cnt = $pdo->prepare('SELECT COUNT(*) FROM forums WHERE rawg_id = ?');
@@ -1048,7 +918,6 @@ function forumGet(int $forumId, int $page = 1, int $pageSize = 50): array {
 
   try {
     $pdo = getPDO();
-    ensureForumsTables($pdo);
 
     $f = $pdo->prepare("
       SELECT f.id, f.rawg_id, f.title, f.description, f.created_at, f.updated_at,
@@ -1126,7 +995,6 @@ function forumPostMessage(string $sessionId, int $forumId, string $message): arr
 
   try {
     $pdo = getPDO();
-    ensureForumsTables($pdo);
 
     $uid = resolveUserIdFromSession($sessionId);
     if (!$uid) return ['success'=>false,'message'=>'Invalid/expired session'];
@@ -1148,6 +1016,8 @@ function forumPostMessage(string $sessionId, int $forumId, string $message): arr
     return ['success'=>false,'message'=>'Server error'];
   }
 }
+
+/* ===== MQ request router ===== */
 
 function requestProcessor(array $request) {
   echo "Received request:\n";
@@ -1175,7 +1045,6 @@ function requestProcessor(array $request) {
       return doGameDetails($id);
     }
 
-   
     case 'like_toggle': {
       $sessionId = (string)($request['sessionId'] ?? '');
       $rawgId    = (int)($request['rawg_id'] ?? 0);
