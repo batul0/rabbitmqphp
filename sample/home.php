@@ -1464,27 +1464,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   function renderMessages(msgs){
-  if (!Array.isArray(msgs) || !msgs.length){
-    thMsgs.innerHTML = `<div class="list-group-item" style="background:#15151f;color:#e8e8ff">No messages yet.</div>`;
-    return;
+  // Build tree: parent_id === null => top-level
+  const byParent = new Map();
+  (Array.isArray(msgs) ? msgs : []).forEach(m => {
+    const pid = (m.parent_id == null ? null : Number(m.parent_id));
+    if (!byParent.has(pid)) byParent.set(pid, []);
+    byParent.get(pid).push(m);
+  });
+  // sort by created_at asc within each bucket
+  for (const arr of byParent.values()) {
+    arr.sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)));
   }
 
-  thMsgs.innerHTML = msgs.map(m=>{
-    const by  = m.username || 'User';
-    const ts  = m.created_at || '';
-    // Support either `message` or `text`
-    const bodyRaw = (m.message ?? m.text ?? '');
-    const txt = String(bodyRaw).replace(/[&<>]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[s]));
-    return `
-      <div class="list-group-item" style="background:#15151f;color:#e8e8ff">
-        <div class="d-flex justify-content-between">
-          <strong>${by}</strong>
-          <small class="text-secondary">${ts}</small>
+  function esc(s){ return String(s).replace(/[&<>]/g, t => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[t])); }
+
+  function renderBranch(parentId, depth){
+    const items = byParent.get(parentId) || [];
+    if (!items.length) return '';
+    return items.map(m => {
+      const bodyRaw = (m.message ?? m.text ?? '');
+      const body = esc(bodyRaw);
+      const by   = esc(m.username || 'User');
+      const ts   = esc(m.created_at || '');
+      const mid  = Number(m.id);
+
+      // inline reply form id
+      const formId = `reply-form-${mid}`;
+
+      return `
+        <div class="list-group-item" style="background:#15151f;color:#e8e8ff">
+          <div class="d-flex justify-content-between">
+            <strong>${by}</strong>
+            <small class="text-secondary">${ts}</small>
+          </div>
+          <div class="mt-1">${body}</div>
+
+          <div class="mt-2">
+            <a href="#" class="small text-decoration-underline" data-reply-btn="${mid}">Reply</a>
+          </div>
+
+          <form class="mt-2 d-none" id="${formId}" data-reply-form="${mid}">
+            <textarea class="form-control mb-2" rows="2" placeholder="Write a reply..."></textarea>
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-sm btn-light">Post reply</button>
+              <button type="button" class="btn btn-sm btn-outline-light" data-reply-cancel="${mid}">Cancel</button>
+            </div>
+          </form>
+
+          <!-- children -->
+          <div class="mt-2 ms-4">
+            ${renderBranch(mid, depth+1)}
+          </div>
         </div>
-        <div class="mt-1">${txt}</div>
-      </div>`;
-  }).join('');
+      `;
+    }).join('');
+  }
+
+  const html = renderBranch(null, 0);
+  thMsgs.innerHTML = html || `<div class="list-group-item" style="background:#15151f;color:#e8e8ff">No messages yet.</div>`;
 }
+
 
 
   backBtn?.addEventListener('click', ()=>{
@@ -1517,6 +1556,59 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Failed to post message');
     }
   });
+  // Event delegation for Reply toggles and submissions
+thMsgs.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-reply-btn]');
+  const cancel = e.target.closest('[data-reply-cancel]');
+  if (btn) {
+    e.preventDefault();
+    const mid = btn.getAttribute('data-reply-btn');
+    const form = thMsgs.querySelector(`[data-reply-form="${mid}"]`);
+    if (form) form.classList.toggle('d-none');
+  }
+  if (cancel) {
+    e.preventDefault();
+    const mid = cancel.getAttribute('data-reply-cancel');
+    const form = thMsgs.querySelector(`[data-reply-form="${mid}"]`);
+    if (form) form.classList.add('d-none');
+  }
+});
+
+thMsgs.addEventListener('submit', async (e) => {
+  const form = e.target.closest('[data-reply-form]');
+  if (!form) return; // only intercept reply forms
+  e.preventDefault();
+
+  const mid = Number(form.getAttribute('data-reply-form'));
+  const ta = form.querySelector('textarea');
+  const text = (ta?.value || '').trim();
+  if (!currentThreadId || !mid || !text) return;
+
+  try {
+    const r = await fetch('forums.php', {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({
+        action: 'post_message',
+        id: String(currentThreadId),
+        text,
+        parent_id: String(mid)
+      }).toString()
+    });
+    const raw = await r.text();
+    let j=null; try{ j=JSON.parse(raw) }catch{}
+    if (!r.ok || !j || j.success===false) throw new Error(j?.message || raw || 'post failed');
+
+    // reset + hide form, then reload
+    if (ta) ta.value = '';
+    form.classList.add('d-none');
+    openThread(currentThreadId);
+  } catch(e2){
+    console.error('reply post failed', e2);
+    alert('Failed to post reply');
+  }
+});
+
 
   // Auto-load list when the Forum section is shown
   document.addEventListener('DOMContentLoaded', ()=>{

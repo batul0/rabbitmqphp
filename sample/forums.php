@@ -72,20 +72,22 @@ case 'get': {
 }
 
 case 'post_message': {
-  $id   = (int)($_POST['id'] ?? 0);
-  $text = trim((string)($_POST['text'] ?? ''));
+  $id        = (int)($_POST['id'] ?? 0);
+  $text      = trim((string)($_POST['text'] ?? ''));
+  $parent_id = isset($_POST['parent_id']) ? (int)$_POST['parent_id'] : null;
   if ($id <= 0 || $text === '') bad('Invalid input');
 
-  // Map to listener’s expected keys
   $req = [
     'type'      => 'forum_post_message',
     'sessionId' => $sid,
     'forum_id'  => $id,
     'message'   => $text,
+    'parent_id' => $parent_id,
   ];
   $res = $client->send_request($req);
   echo json_encode($res ?: ['success'=>false,'message'=>'listener error']); exit;
 }
+
 
 
     default:
