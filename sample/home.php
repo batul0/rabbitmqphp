@@ -241,25 +241,162 @@ try {
   </section>
 
   <!-- Forum -->
-  <section id="forum-content" class="content-display">
-    <div class="container my-4">
-      <h2 class="mb-4">Message Forum</h2>
+  <!-- Forum -->
+<section id="forum-content" class="content-display">
+  <div class="container my-4">
 
-      <div class="comment-section">
-        <div class="comment-header" id="forum-comment-header">
-          <h3 class="mb-0">Message Board</h3>
-          <span class="text-secondary small">click to toggle</span>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h2 class="mb-0">Forums</h2>
+    </div>
+
+    <!-- Status line -->
+    <div id="forumStatus" class="alert d-none">Loading…</div>
+
+    <!-- View: Create Forum -->
+    <div id="forumCreateView" class="card mb-4 d-none" style="background:#12121b;border:1px solid rgba(124,77,255,.25)">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Create a Forum</h5>
+
+        <div id="forumCreateGamePreview" class="d-flex align-items-center mb-3 d-none">
+          <img id="forumCreateGameImg" src="" alt="" style="width:96px;height:54px;object-fit:cover;border-radius:8px;border:1px solid rgba(124,77,255,.25);margin-right:12px;">
+          <div>
+            <div class="small text-secondary">Game</div>
+            <div id="forumCreateGameName" class="fw-semibold"></div>
+          </div>
         </div>
-        <div id="forum-comment-container">
-          <ul id="forum-comment-list"></ul>
-          <form id="forum-comment-form">
-            <textarea id="forum-comment-text" placeholder="Write a message..."></textarea>
-            <button type="submit">Post</button>
-          </form>
-        </div>
+
+        <form id="forumCreateForm">
+          <input type="hidden" id="forumGameId" name="rawg_id" value="">
+          <div class="mb-3">
+            <label class="form-label">Forum title</label>
+            <input type="text" id="forumTitle" name="title" class="form-control" placeholder="e.g. Strategies, Builds, Tips">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Forum description</label>
+            <textarea id="forumDesc" name="description" class="form-control" rows="3" placeholder="What’s this forum about?"></textarea>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-light" type="submit">Create</button>
+            <button class="btn btn-outline-light" type="button" id="forumCancelCreate">Cancel</button>
+          </div>
+        </form>
       </div>
     </div>
-  </section>
+
+    <!-- View: Forum List -->
+    <div id="forumListView">
+      <div id="forumList" class="row g-4"></div>
+      <div class="text-center mt-3">
+        <button id="forumLoadMore" class="btn btn-dark d-none">Load more</button>
+      </div>
+    </div>
+
+    <!-- View: Thread -->
+    <div id="forumThreadView" class="d-none">
+      <button id="forumBackToList" class="btn btn-sm btn-outline-light mb-3">&larr; Back to Forums</button>
+      <div id="forumThreadHeader" class="card mb-3" style="background:#12121b;border:1px solid rgba(124,77,255,.25)">
+        <div class="card-body d-flex gap-3">
+          <img id="forumThreadGameImg" src="" alt="" style="width:128px;height:72px;object-fit:cover;border-radius:10px;border:1px solid rgba(124,77,255,.25);">
+          <div>
+            <div class="small text-secondary" id="forumThreadGameTitle"></div>
+            <h5 id="forumThreadTitle" class="mb-1"></h5>
+            <div id="forumThreadDesc" class="text-secondary"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="forumThreadMessages" class="list-group mb-3" style="border-radius:10px;overflow:hidden;"></div>
+
+      <form id="forumMessageForm" class="card" style="background:#12121b;border:1px solid rgba(124,77,255,.25)">
+        <div class="card-body">
+          <label class="form-label">Add a message</label>
+          <textarea id="forumMessageText" class="form-control mb-2" rows="3" placeholder="Write something helpful..."></textarea>
+          <button type="submit" class="btn btn-light">Post</button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+</section>
+<!-- Forum -->
+<section id="forum-content" class="content-display">
+  <div class="container my-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h2 class="mb-0">Forums</h2>
+      <button id="forumNewBtn" class="btn btn-sm btn-light">+ New Forum</button>
+    </div>
+
+    <!-- Status line -->
+    <div id="forumStatus" class="alert d-none">Loading…</div>
+
+    <!-- View: Create Forum -->
+    <div id="forumCreateView" class="card mb-4 d-none" style="background:#12121b;border:1px solid rgba(124,77,255,.25)">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Create a Forum</h5>
+
+        <div id="forumCreateGamePreview" class="d-flex align-items-center mb-3 d-none">
+          <img id="forumCreateGameImg" src="" alt="" style="width:96px;height:54px;object-fit:cover;border-radius:8px;border:1px solid rgba(124,77,255,.25);margin-right:12px;">
+          <div>
+            <div class="small text-secondary">Game</div>
+            <div id="forumCreateGameName" class="fw-semibold"></div>
+          </div>
+        </div>
+
+        <form id="forumCreateForm">
+          <input type="hidden" id="forumGameId" name="rawg_id" value="">
+          <div class="mb-3">
+            <label class="form-label">Forum title</label>
+            <input type="text" id="forumTitle" name="title" class="form-control" placeholder="e.g. Strategies, Builds, Tips">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Forum description</label>
+            <textarea id="forumDesc" name="description" class="form-control" rows="3" placeholder="What’s this forum about?"></textarea>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-light" type="submit">Create</button>
+            <button class="btn btn-outline-light" type="button" id="forumCancelCreate">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- View: Forum List -->
+    <div id="forumListView">
+      <div id="forumList" class="row g-4"></div>
+      <div class="text-center mt-3">
+        <button id="forumLoadMore" class="btn btn-dark d-none">Load more</button>
+      </div>
+    </div>
+
+    <!-- View: Thread -->
+    <div id="forumThreadView" class="d-none">
+      <button id="forumBackToList" class="btn btn-sm btn-outline-light mb-3">&larr; Back to Forums</button>
+      <div id="forumThreadHeader" class="card mb-3" style="background:#12121b;border:1px solid rgba(124,77,255,.25)">
+        <div class="card-body d-flex gap-3">
+          <img id="forumThreadGameImg" src="" alt="" style="width:128px;height:72px;object-fit:cover;border-radius:10px;border:1px solid rgba(124,77,255,.25);">
+          <div>
+            <div class="small text-secondary" id="forumThreadGameTitle"></div>
+            <h5 id="forumThreadTitle" class="mb-1"></h5>
+            <div id="forumThreadDesc" class="text-secondary"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="forumThreadMessages" class="list-group mb-3" style="border-radius:10px;overflow:hidden;"></div>
+
+      <form id="forumMessageForm" class="card" style="background:#12121b;border:1px solid rgba(124,77,255,.25)">
+        <div class="card-body">
+          <label class="form-label">Add a message</label>
+          <textarea id="forumMessageText" class="form-control mb-2" rows="3" placeholder="Write something helpful..."></textarea>
+          <button type="submit" class="btn btn-light">Post</button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+</section>
+
 
   <!-- Recommendations -->
   <section id="recommendations-content" class="content-display">
@@ -503,6 +640,7 @@ try {
             <button class="btn btn-sm btn-outline-light" data-act="like" data-id="${g.rawg_id}">❤️ Like</button>
             <button class="btn btn-sm btn-outline-light" data-act="wishlist" data-id="${g.rawg_id}">📝 Wishlist</button>
             <button class="btn btn-sm btn-outline-light" data-act="played" data-id="${g.rawg_id}">✅ Played</button>
+            <button class="btn btn-sm btn-outline-light" data-act="create-forum" data-id="${g.rawg_id}">➕ Create Forum</button>
           </div>
 
           <div class="row g-3">
@@ -613,6 +751,41 @@ try {
             });
           }
         }
+
+          // Create Forum
+          const cfBtn = actionsWrap.querySelector('button[data-act="create-forum"]');
+          if (cfBtn) {
+            cfBtn.addEventListener('click', () => {
+              // Prep data for the form
+              const draft = {
+                rawg_id: g.rawg_id,
+                game_name: g.name || '',
+                game_image: g.background_image || g.background_image_additional || ''
+              };
+              window.__forumDraft = draft;
+
+              // After the modal is fully hidden, switch sections + open the form
+              const goToForumCreate = () => {
+                const nav = document.getElementById('sidebarNav');
+                nav?.querySelector('a[data-target="forum-content"]')?.click();
+                if (typeof window.forumShowCreate === 'function') {
+                  window.forumShowCreate(draft);
+                }
+              };
+
+              if (detailsModal) {
+                // Wait for Bootstrap to finish removing the backdrop, then navigate
+                const modalEl = document.getElementById('gameDetailsModal');
+                if (modalEl) {
+                  modalEl.addEventListener('hidden.bs.modal', goToForumCreate, { once: true });
+                }
+                detailsModal.hide();
+              } else {
+                goToForumCreate();
+              }
+            });
+          }
+
 
         /* ===== Stars (true half fill, glow, save via rating.php) ===== */
         (function initStars(){
@@ -1069,5 +1242,296 @@ document.addEventListener('DOMContentLoaded', () => {
   render();
 });
 </script>
+
+<script>
+(function(){
+  const statusEl   = document.getElementById('forumStatus');
+  const listWrap   = document.getElementById('forumList');
+  const listView   = document.getElementById('forumListView');
+  const loadMoreBt = document.getElementById('forumLoadMore');
+
+  const createView = document.getElementById('forumCreateView');
+  const newBtn     = document.getElementById('forumNewBtn');
+  const cancelBtn  = document.getElementById('forumCancelCreate');
+  const form       = document.getElementById('forumCreateForm');
+  const fGameId    = document.getElementById('forumGameId');
+  const fTitle     = document.getElementById('forumTitle');
+  const fDesc      = document.getElementById('forumDesc');
+  const gamePrev   = document.getElementById('forumCreateGamePreview');
+  const gamePrevImg= document.getElementById('forumCreateGameImg');
+  const gamePrevNm = document.getElementById('forumCreateGameName');
+
+  const threadView = document.getElementById('forumThreadView');
+  const backBtn    = document.getElementById('forumBackToList');
+  const thGameImg  = document.getElementById('forumThreadGameImg');
+  const thGameTitle= document.getElementById('forumThreadGameTitle');
+  const thTitle    = document.getElementById('forumThreadTitle');
+  const thDesc     = document.getElementById('forumThreadDesc');
+  const thMsgs     = document.getElementById('forumThreadMessages');
+  const msgForm    = document.getElementById('forumMessageForm');
+  const msgText    = document.getElementById('forumMessageText');
+
+  let page = 1, totalPages = 1, isLoading=false;
+  let currentThreadId = null;
+
+  function setStatus(msg, type){
+    statusEl.className = 'alert';
+    statusEl.classList.add(type ? `alert-${type}` : 'alert-info');
+    statusEl.textContent = msg;
+    statusEl.classList.remove('d-none');
+  }
+  function clearStatus(){ statusEl.classList.add('d-none'); }
+
+  function show(viewName){
+    // list/create/thread views
+    listView.classList.add('d-none');
+    createView.classList.add('d-none');
+    threadView.classList.add('d-none');
+    if (viewName==='list') listView.classList.remove('d-none');
+    if (viewName==='create') createView.classList.remove('d-none');
+    if (viewName==='thread') threadView.classList.remove('d-none');
+    window.scrollTo({top:0, behavior:'instant'});
+  }
+
+  // ===== List =====
+  async function loadForums(reset=false){
+    if (isLoading) return; isLoading=true;
+    if (reset) { page=1; listWrap.innerHTML=''; totalPages=1; }
+    setStatus('Loading forums…');
+
+    try {
+      const r = await fetch('forums.php', {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({ action:'list', page:String(page), pageSize:'9' }).toString()
+      });
+      const raw = await r.text();
+      let j=null; try{ j=JSON.parse(raw) }catch{}
+      if (!r.ok || !j || j.success===false) throw new Error(j?.message || raw || 'list failed');
+
+      clearStatus();
+      totalPages = j.totalPages || 1;
+      renderList(j.items || [], {append: page>1});
+      loadMoreBt.classList.toggle('d-none', !(page < totalPages));
+    } catch(e){
+      console.error('forums list failed', e);
+      setStatus('Failed to load forums', 'danger');
+    } finally {
+      isLoading=false;
+    }
+  }
+
+  function renderList(items, {append=false}={}){
+    if (!items.length && !append) {
+      listWrap.innerHTML = '<div class="col-12"><div class="alert">No forums yet.</div></div>';
+      return;
+    }
+    const html = items.map(it=>{
+      const img  = it.game_image || '';
+      const gttl = it.game_name || 'Unknown game';
+      const fttl = it.title || 'Untitled';
+      const fid  = it.id;
+      return `
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="game-card h-100">
+          ${img ? `<img src="${img}" class="game-img w-100" alt="">` : ''}
+          <div class="p-3 d-flex flex-column">
+            <div class="small text-secondary">${gttl}</div>
+            <h5 class="mb-2">${fttl}</h5>
+            <div class="mt-auto">
+              <a href="#" data-forum-id="${fid}" class="btn btn-sm btn-light">Open</a>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    if (append){
+      const tmp = document.createElement('div'); tmp.innerHTML = html;
+      [...tmp.children].forEach(n=>listWrap.appendChild(n));
+    } else {
+      listWrap.innerHTML = html;
+    }
+    listWrap.querySelectorAll('a[data-forum-id]').forEach(a=>{
+      a.addEventListener('click', e=>{
+        e.preventDefault();
+        const fid = parseInt(a.getAttribute('data-forum-id')||'0',10);
+        if (fid) openThread(fid);
+      });
+    });
+  }
+
+  loadMoreBt?.addEventListener('click', ()=>{
+    if (page < totalPages) { page+=1; loadForums(false); }
+  });
+
+  // ===== Create =====
+  function prefillCreate(draft){
+    fGameId.value = draft?.rawg_id || '';
+    fTitle.value  = draft?.game_name ? `Discussion: ${draft.game_name}` : '';
+    fDesc.value   = '';
+    if (draft?.game_name || draft?.game_image){
+      gamePrev.classList.remove('d-none');
+      gamePrevNm.textContent = draft?.game_name || '';
+      gamePrevImg.src = draft?.game_image || '';
+    } else {
+      gamePrev.classList.add('d-none');
+      gamePrevNm.textContent = '';
+      gamePrevImg.src = '';
+    }
+  }
+
+  newBtn?.addEventListener('click', ()=>{
+    prefillCreate(window.__forumDraft || null);
+    show('create');
+    setTimeout(()=>fTitle.focus(), 50);
+  });
+
+  cancelBtn?.addEventListener('click', ()=>{
+    show('list');
+    window.__forumDraft = null;
+  });
+
+  form?.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const rawg_id    = fGameId.value.trim();
+    const title      = fTitle.value.trim();
+    const description= fDesc.value.trim();
+    if (!rawg_id || !title){ alert('Please provide a game (open a game and click "+ Create Forum") and a title.'); return; }
+
+    try {
+      const r = await fetch('forums.php', {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({
+          action:'create',
+          rawg_id, title, description
+        }).toString()
+      });
+      const raw = await r.text();
+      let j=null; try{ j=JSON.parse(raw) }catch{}
+      if (!r.ok || !j || j.success===false) throw new Error(j?.message || raw || 'create failed');
+
+      window.__forumDraft = null;
+      show('list');
+      page=1; loadForums(true);
+    } catch(e){
+      console.error('forum create failed', e);
+      alert('Failed to create forum');
+    }
+  });
+
+  // Exposed so Game Details handler can show the form with prefill
+  window.forumShowCreate = (draft)=>{
+    prefillCreate(draft);
+    show('create');
+    setTimeout(()=>fTitle.focus(), 50);
+  };
+
+  // ===== Thread =====
+  async function openThread(forumId){
+  currentThreadId = forumId;
+  setStatus('Loading thread…');
+  show('thread');
+  try {
+    const r = await fetch('forums.php', {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({ action:'get', id:String(forumId) }).toString()
+    });
+    const raw = await r.text();
+    let j=null; try{ j=JSON.parse(raw) }catch{}
+    if (!r.ok || !j || j.success===false) throw new Error(j?.message || raw || 'get failed');
+
+    clearStatus();
+
+    // Accept either shape from the listener
+    const th = j.item || j.forum || {};
+
+    // Header fields
+    thGameImg.src              = th.game_image || '';
+    thGameTitle.textContent    = th.game_name || '';
+    thTitle.textContent        = th.title || '';
+    thDesc.textContent         = th.description || '';
+
+    // Messages can be top-level (preferred) or nested under the item
+    const messages = j.messages || th.messages || [];
+    renderMessages(messages);
+  } catch(e){
+    console.error('thread get failed', e);
+    setStatus('Failed to load thread', 'danger');
+  }
+}
+
+
+  function renderMessages(msgs){
+  if (!Array.isArray(msgs) || !msgs.length){
+    thMsgs.innerHTML = `<div class="list-group-item" style="background:#15151f;color:#e8e8ff">No messages yet.</div>`;
+    return;
+  }
+
+  thMsgs.innerHTML = msgs.map(m=>{
+    const by  = m.username || 'User';
+    const ts  = m.created_at || '';
+    // Support either `message` or `text`
+    const bodyRaw = (m.message ?? m.text ?? '');
+    const txt = String(bodyRaw).replace(/[&<>]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[s]));
+    return `
+      <div class="list-group-item" style="background:#15151f;color:#e8e8ff">
+        <div class="d-flex justify-content-between">
+          <strong>${by}</strong>
+          <small class="text-secondary">${ts}</small>
+        </div>
+        <div class="mt-1">${txt}</div>
+      </div>`;
+  }).join('');
+}
+
+
+  backBtn?.addEventListener('click', ()=>{
+    show('list');
+    page=1; loadForums(true);
+  });
+
+  msgForm?.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const text = (msgText.value || '').trim();
+    if (!currentThreadId || !text) return;
+    try {
+      const r = await fetch('forums.php', {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({
+          action:'post_message',
+          id:String(currentThreadId),
+          text
+        }).toString()
+      });
+      const raw = await r.text();
+      let j=null; try{ j=JSON.parse(raw) }catch{}
+      if (!r.ok || !j || j.success===false) throw new Error(j?.message || raw || 'post failed');
+      msgText.value='';
+      // reload thread messages
+      openThread(currentThreadId);
+    } catch(e){
+      console.error('message post failed', e);
+      alert('Failed to post message');
+    }
+  });
+
+  // Auto-load list when the Forum section is shown
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const nav = document.getElementById('sidebarNav');
+    const forumLink = nav?.querySelector('a[data-target="forum-content"]');
+    // When switching to forum section, refresh list
+    if (forumLink){
+      forumLink.addEventListener('click', ()=>{
+        show('list');
+        page=1; loadForums(true);
+      });
+    }
+  });
+})();
+</script>
+
 </body>
 </html>
