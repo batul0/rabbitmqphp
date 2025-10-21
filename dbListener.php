@@ -932,6 +932,222 @@ function doLikeList(string $sessionId, int $page, int $pageSize): array {
   }
 }
 
+function forumCreate(string $sessionId, int $rawgId, string $title, string $description): array {
+  $title = trim($title);
+  $description = trim($description);
+  if ($rawgId <= 0 || $title === '') {
+    return ['success'=>false,'message'=>'Missing game or title'];
+  }
+  try {
+    $pdo = getPDO();
+    ensureForumsTables($pdo);
+
+    $uid = resolveUserIdFromSession($sessionId);
+    if (!$uid) return ['success'=>false,'message'=>'Invalid/expired session'];
+
+    // Ensure game row exists to enrich forum cards later (best-effort)
+    try {
+      $gq = $pdo->prepare('SELECT 1 FROM games WHERE rawg_id = ?');
+      $gq->execute([$rawgId]);
+      if (!$gq->fetchColumn()) {
+        // insert stub game row so FK-less join still has data later
+        upsertGame($pdo, ['rawg_id'=>$rawgId, 'name'=>'', 'background_image'=>null, 'platforms'=>[], 'genres'=>[]]);
+      }
+    } catch (Throwable $e) { /* ignore */ }
+
+    $ins = $pdo->prepare("
+      INSERT INTO forums (rawg_id, created_by, title, description)
+      VALUES (?, ?, ?, ?)
+    ");
+    $ins->execute([$rawgId, $uid, $title, $description]);
+
+    $forumId = (int)$pdo->lastInsertId();
+    return ['success'=>true,'forum_id'=>$forumId];
+  } catch (PDOException $e) {
+    if ($e->getCode() === '23000') {
+      return ['success'=>false,'message'=>'You already created a forum with the same title for this game'];
+    }
+    error_log('[forumCreate] DB error: '.$e->getMessage());
+    return ['success'=>false,'message'=>'Server error'];
+  } catch (Throwable $e) {
+    error_log('[forumCreate] error: '.$e->getMessage());
+    return ['success'=>false,'message'=>'Server error'];
+  }
+}
+
+function forumList(int $page = 1, int $pageSize = 24, ?int $rawgId = null): array {
+  $page = max(1,$page);
+  $pageSize = max(1,min(100,$pageSize));
+  $offset = ($page-1)*$pageSize;
+
+  try {
+    $pdo = getPDO();
+    ensureForumsTables($pdo);
+
+    if ($rawgId) {
+      $cnt = $pdo->prepare('SELECT COUNT(*) FROM forums WHERE rawg_id = ?');
+      $cnt->execute([$rawgId]);
+    } else {
+      $cnt = $pdo->query('SELECT COUNT(*) FROM forums');
+    }
+    $total = (int)$cnt->fetchColumn();
+
+    $sql = "
+      SELECT f.id, f.rawg_id, f.title, f.description, f.created_at, f.updated_at,
+             u.username AS author,
+             g.name AS game_name, g.background_image AS game_image,
+             COALESCE(g.user_rating, g.rating) AS game_rating,
+             (SELECT COUNT(*) FROM forum_messages m WHERE m.forum_id = f.id) AS message_count
+        FROM forums f
+        JOIN users u ON u.id = f.created_by
+        LEFT JOIN games g ON g.rawg_id = f.rawg_id
+    ";
+    $params = [];
+    if ($rawgId) { $sql .= " WHERE f.rawg_id = ?"; $params[] = $rawgId; }
+    $sql .= " ORDER BY f.updated_at DESC, f.created_at DESC LIMIT ? OFFSET ?";
+    $params[] = $pageSize; $params[] = $offset;
+
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $i=>$v) {
+      $stmt->bindValue($i+1, $v, is_int($v)?PDO::PARAM_INT:PDO::PARAM_STR);
+    }
+    $stmt->execute();
+
+    $rows = $stmt->fetchAll();
+    $items = [];
+    foreach ($rows as $r) {
+      $items[] = [
+        'id' => (int)$r['id'],
+        'rawg_id' => (int)$r['rawg_id'],
+        'title' => $r['title'],
+        'description' => $r['description'],
+        'author' => $r['author'],
+        'created_at' => $r['created_at'],
+        'updated_at' => $r['updated_at'],
+        'game_name' => $r['game_name'],
+        'game_image' => $r['game_image'],
+        'game_rating' => isset($r['game_rating']) ? (float)$r['game_rating'] : null,
+        'message_count' => (int)$r['message_count'],
+      ];
+    }
+
+    $totalPages = max(1, (int)ceil($total / $pageSize));
+    return ['success'=>true,'items'=>$items,'page'=>$page,'pageSize'=>$pageSize,'total'=>$total,'totalPages'=>$totalPages];
+
+  } catch (Throwable $e) {
+    error_log('[forumList] error: '.$e->getMessage());
+    return ['success'=>false,'message'=>'Server error'];
+  }
+}
+
+function forumGet(int $forumId, int $page = 1, int $pageSize = 50): array {
+  if ($forumId <= 0) return ['success'=>false,'message'=>'Invalid forum'];
+  $page = max(1,$page);
+  $pageSize = max(1,min(200,$pageSize));
+  $offset = ($page-1)*$pageSize;
+
+  try {
+    $pdo = getPDO();
+    ensureForumsTables($pdo);
+
+    $f = $pdo->prepare("
+      SELECT f.id, f.rawg_id, f.title, f.description, f.created_at, f.updated_at,
+             u.username AS author,
+             g.name AS game_name, g.background_image AS game_image,
+             COALESCE(g.user_rating, g.rating) AS game_rating
+        FROM forums f
+        JOIN users u ON u.id = f.created_by
+        LEFT JOIN games g ON g.rawg_id = f.rawg_id
+       WHERE f.id = ?
+       LIMIT 1
+    ");
+    $f->execute([$forumId]);
+    $forum = $f->fetch();
+    if (!$forum) return ['success'=>false,'message'=>'Forum not found'];
+
+    $cnt = $pdo->prepare('SELECT COUNT(*) FROM forum_messages WHERE forum_id = ?');
+    $cnt->execute([$forumId]);
+    $total = (int)$cnt->fetchColumn();
+
+    $m = $pdo->prepare("
+      SELECT m.id, m.message, m.created_at, u.username
+        FROM forum_messages m
+        JOIN users u ON u.id = m.user_id
+       WHERE m.forum_id = ?
+       ORDER BY m.created_at ASC
+       LIMIT ? OFFSET ?
+    ");
+    $m->bindValue(1, $forumId, PDO::PARAM_INT);
+    $m->bindValue(2, $pageSize, PDO::PARAM_INT);
+    $m->bindValue(3, $offset, PDO::PARAM_INT);
+    $m->execute();
+
+    $msgs = [];
+    foreach ($m->fetchAll() as $row) {
+      $msgs[] = [
+        'id' => (int)$row['id'],
+        'username' => $row['username'],
+        'message' => $row['message'],
+        'created_at' => $row['created_at'],
+      ];
+    }
+    $totalPages = max(1, (int)ceil($total / $pageSize));
+
+    return [
+      'success'=>true,
+      'forum'=>[
+        'id'=>(int)$forum['id'],
+        'rawg_id'=>(int)$forum['rawg_id'],
+        'title'=>$forum['title'],
+        'description'=>$forum['description'],
+        'author'=>$forum['author'],
+        'created_at'=>$forum['created_at'],
+        'updated_at'=>$forum['updated_at'],
+        'game_name'=>$forum['game_name'],
+        'game_image'=>$forum['game_image'],
+        'game_rating'=> isset($forum['game_rating']) ? (float)$forum['game_rating'] : null
+      ],
+      'messages'=>$msgs,
+      'page'=>$page,
+      'pageSize'=>$pageSize,
+      'total'=>$total,
+      'totalPages'=>$totalPages
+    ];
+
+  } catch (Throwable $e) {
+    error_log('[forumGet] error: '.$e->getMessage());
+    return ['success'=>false,'message'=>'Server error'];
+  }
+}
+
+function forumPostMessage(string $sessionId, int $forumId, string $message): array {
+  $message = trim($message);
+  if ($forumId <= 0 || $message === '') return ['success'=>false,'message'=>'Empty message'];
+
+  try {
+    $pdo = getPDO();
+    ensureForumsTables($pdo);
+
+    $uid = resolveUserIdFromSession($sessionId);
+    if (!$uid) return ['success'=>false,'message'=>'Invalid/expired session'];
+
+    // ensure forum exists
+    $chk = $pdo->prepare('SELECT id FROM forums WHERE id = ?');
+    $chk->execute([$forumId]);
+    if (!$chk->fetchColumn()) return ['success'=>false,'message'=>'Forum not found'];
+
+    $ins = $pdo->prepare('INSERT INTO forum_messages (forum_id, user_id, message) VALUES (?,?,?)');
+    $ins->execute([$forumId, $uid, $message]);
+
+    // touch forum.updated_at so it floats up in list
+    $pdo->prepare('UPDATE forums SET updated_at = NOW() WHERE id = ?')->execute([$forumId]);
+
+    return ['success'=>true, 'message_id'=>(int)$pdo->lastInsertId()];
+  } catch (Throwable $e) {
+    error_log('[forumPostMessage] error: '.$e->getMessage());
+    return ['success'=>false,'message'=>'Server error'];
+  }
+}
 
 function requestProcessor(array $request) {
   echo "Received request:\n";
