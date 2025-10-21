@@ -989,7 +989,7 @@ function forumGet(int $forumId, int $page = 1, int $pageSize = 50): array {
   }
 }
 
-function forumPostMessage(string $sessionId, int $forumId, string $message): array {
+function forumPostMessage(string $sessionId, int $forumId, string $message, ?int $parentId = null): array {
   $message = trim($message);
   if ($forumId <= 0 || $message === '') return ['success'=>false,'message'=>'Empty message'];
 
@@ -1004,10 +1004,17 @@ function forumPostMessage(string $sessionId, int $forumId, string $message): arr
     $chk->execute([$forumId]);
     if (!$chk->fetchColumn()) return ['success'=>false,'message'=>'Forum not found'];
 
-    $ins = $pdo->prepare('INSERT INTO forum_messages (forum_id, user_id, message) VALUES (?,?,?)');
-    $ins->execute([$forumId, $uid, $message]);
+    // if replying, ensure parent exists in same forum
+    if ($parentId) {
+      $pc = $pdo->prepare('SELECT 1 FROM forum_messages WHERE id = ? AND forum_id = ?');
+      $pc->execute([$parentId, $forumId]);
+      if (!$pc->fetchColumn()) return ['success'=>false,'message'=>'Parent message not found'];
+    }
 
-    // touch forum.updated_at so it floats up in list
+    $ins = $pdo->prepare('INSERT INTO forum_messages (forum_id, user_id, message, parent_id) VALUES (?,?,?,?)');
+    $ins->execute([$forumId, $uid, $message, $parentId]);
+
+    // bump thread
     $pdo->prepare('UPDATE forums SET updated_at = NOW() WHERE id = ?')->execute([$forumId]);
 
     return ['success'=>true, 'message_id'=>(int)$pdo->lastInsertId()];
@@ -1016,6 +1023,7 @@ function forumPostMessage(string $sessionId, int $forumId, string $message): arr
     return ['success'=>false,'message'=>'Server error'];
   }
 }
+
 
 /* ===== MQ request router ===== */
 
