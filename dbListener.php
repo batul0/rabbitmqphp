@@ -1212,13 +1212,36 @@ function requestProcessor(array $request) {
       $ps        = (int)($request['pageSize'] ?? 24);
       return playedList($sessionId, $page, $ps);
     }
-
-    /* Ratings */
     case 'rating_set': {
       $sessionId = (string)($request['sessionId'] ?? '');
       $rawgId    = (int)($request['rawg_id'] ?? 0);
       $value     = (float)($request['value'] ?? 0);
       return doRatingSet($sessionId, $rawgId, $value);
+    }
+    case 'forum_create': {
+      $sessionId   = (string)($request['sessionId'] ?? '');
+      $rawgId      = (int)($request['rawg_id'] ?? 0);
+      $title       = (string)($request['title'] ?? '');
+      $description = (string)($request['description'] ?? '');
+      return forumCreate($sessionId, $rawgId, $title, $description);
+    }
+    case 'forum_list': {
+      $page   = (int)($request['page'] ?? 1);
+      $ps     = (int)($request['pageSize'] ?? 24);
+      $rawgId = isset($request['rawg_id']) ? (int)$request['rawg_id'] : null;
+      return forumList($page, $ps, $rawgId);
+    }
+    case 'forum_get': {
+      $forumId = (int)($request['forum_id'] ?? 0);
+      $page    = (int)($request['page'] ?? 1);
+      $ps      = (int)($request['pageSize'] ?? 50);
+      return forumGet($forumId, $page, $ps);
+    }
+    case 'forum_post_message': {
+      $sessionId = (string)($request['sessionId'] ?? '');
+      $forumId   = (int)($request['forum_id'] ?? 0);
+      $message   = (string)($request['message'] ?? '');
+      return forumPostMessage($sessionId, $forumId, $message);
     }
 
     default:
