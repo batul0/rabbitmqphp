@@ -1374,6 +1374,12 @@ function requestProcessor(array $request) {
       $ps     = (int)($request['pageSize'] ?? 6);
       return reviewList($rawgId, $page, $ps);
     }
+    case 'notifications': {
+      return getNotifications($request);
+    }
+    case 'notifications_delete': {
+      return deleteNotifications($request);
+    }
 
     default:
       return ['success' => false, 'message' => 'ERROR: unknown type'];
