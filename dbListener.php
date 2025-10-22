@@ -1149,6 +1149,62 @@ function reviewList(int $rawgId, int $page=1, int $pageSize=6): array {
   }
 }
 
+function getNotifications(array $request): array {
+    $sessionId = $request['sessionId'] ?? '';
+    if ($sessionId === '') return ['success' => false, 'message' => 'Invalid session'];
+
+    try {
+        $pdo = getPDO();
+
+        // Who am I?
+        $stmt = $pdo->prepare("
+            SELECT s.user_id
+            FROM sessions s
+            WHERE s.session_key = ? AND s.expires_at > NOW()
+            LIMIT 1
+        ");
+        $stmt->execute([$sessionId]);
+        $user = $stmt->fetch();
+        if (!$user) return ['success' => false, 'message' => 'Invalid session'];
+        $user_id = (int)$user['user_id'];
+
+        // Fetch notifications; include rawg_id for deep-linking
+        $stmt = $pdo->prepare("
+            SELECT n.id,
+                   n.rawg_id,
+                   g.name   AS game_name,
+                   n.notification_type,
+                   n.created_at
+            FROM notifications n
+            JOIN games g ON n.rawg_id = g.rawg_id
+            WHERE n.user_id = ?
+            ORDER BY n.created_at DESC
+        ");
+        $stmt->execute([$user_id]);
+        $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        // Friendly message
+        foreach ($notifications as &$notif) {
+            if ($notif['notification_type'] === 'comment') {
+                $notif['message'] = "You were mentioned in the forum for {$notif['game_name']}";
+            } else {
+                $t = htmlspecialchars($notif['notification_type'] ?? 'new', ENT_QUOTES, 'UTF-8');
+                $notif['message'] = "You have a {$t} notification";
+            }
+        }
+        unset($notif);
+
+        return [
+            'success'        => true,
+            'count'          => count($notifications),
+            'notifications'  => $notifications
+        ];
+
+    } catch (Throwable $e) {
+        error_log('[getNotifications] ' . $e->getMessage());
+        return ['success' => false, 'message' => 'Database error'];
+    }
+}
 
 /* ===== MQ request router ===== */
 
