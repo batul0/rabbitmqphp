@@ -1247,6 +1247,20 @@ function requestProcessor(array $request) {
       return forumPostMessage($sessionId, $forumId, $message, $parentId);
 }
 
+    case 'review_create': {
+      $sessionId = (string)($request['sessionId'] ?? '');
+      $rawgId    = (int)($request['rawg_id'] ?? 0);
+      $title     = (string)($request['title'] ?? '');
+      $body      = (string)($request['body'] ?? '');
+      $rating    = (float)($request['rating'] ?? 0);
+      return reviewCreate($sessionId, $rawgId, $title, $body, $rating);
+    }
+    case 'review_list': {
+      $rawgId = (int)($request['rawg_id'] ?? 0);
+      $page   = (int)($request['page'] ?? 1);
+      $ps     = (int)($request['pageSize'] ?? 6);
+      return reviewList($rawgId, $page, $ps);
+    }
 
     default:
       return ['success' => false, 'message' => 'ERROR: unknown type'];
