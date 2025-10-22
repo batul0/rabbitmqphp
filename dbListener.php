@@ -1254,7 +1254,109 @@ function deleteNotifications(array $request): array {
   }
 }
 
+function doRecommendations(string $sessionId, int $limit = 12): array {
+  $userId = resolveUserIdFromSession($sessionId);
+  if (!$userId) return ['success'=>false,'message'=>'Unauthorized'];
 
+  try {
+    $pdo = getPDO();
+
+    // get genres from liked and wishlisted games
+    $sql = "
+      SELECT g.genres
+      FROM games g
+      JOIN liked_games lg ON lg.rawg_id = g.rawg_id AND lg.user_id = ?
+      UNION ALL
+      SELECT g.genres
+      FROM games g
+      JOIN wishlist_games wg ON wg.rawg_id = g.rawg_id AND wg.user_id = ?
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$userId, $userId]);
+
+    $genreCount = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $json) {
+      $arr = json_decode($json, true);
+      if (is_array($arr)) {
+        foreach ($arr as $g) {
+          $name = is_array($g) ? ($g['name'] ?? '') : (string)$g;
+          if ($name !== '') $genreCount[$name] = ($genreCount[$name] ?? 0) + 1;
+        }
+      }
+    }
+
+    if (!$genreCount) return ['success'=>true,'items'=>[]];
+
+    arsort($genreCount);
+    $topGenres = array_slice(array_keys($genreCount), 0, 3);
+
+    // try to get recommended games from local db
+    $where = implode(' OR ', array_fill(0, count($topGenres), "JSON_SEARCH(genres, 'one', ?) IS NOT NULL"));
+    $sql = "
+      SELECT rawg_id, name, released, rating, user_rating, background_image, platforms, genres
+      FROM games
+      WHERE ($where)
+        AND rawg_id NOT IN (
+          SELECT rawg_id FROM liked_games WHERE user_id = ?
+          UNION
+          SELECT rawg_id FROM wishlist_games WHERE user_id = ?
+        )
+      ORDER BY COALESCE(user_rating, rating) DESC
+      LIMIT ?
+    ";
+    $stmt = $pdo->prepare($sql);
+    $params = array_merge($topGenres, [$userId, $userId, $limit]);
+    $stmt->execute($params);
+    $items = $stmt->fetchAll();
+
+    // if not enough local results, call dmz api
+    if (count($items) < $limit) {
+      try {
+        $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
+        $genreQuery = implode(',', $topGenres);
+        $dmzRes = $dmz->send_request([
+          'type'     => 'fetch_games',
+          'page'     => 1,
+          'pageSize' => $limit [2],
+          'query'    => $genreQuery,
+          'ordering' => '-rating'
+        ]);
+
+        if (is_array($dmzRes) && !empty($dmzRes['success']) && !empty($dmzRes['items'])) {
+          foreach ($dmzRes['items'] as $g) {
+            if (!empty($g['rawg_id'])) upsertGame($pdo, $g);
+          }
+          // rerun local query after updating db
+          $stmt->execute($params);
+          $items = $stmt->fetchAll();
+        }
+      } catch (Throwable $e) {
+        error_log('[doRecommendations] DMZ fallback failed: ' . $e->getMessage());
+      }
+    }
+
+    $formatted = [];
+    foreach ($items as $r) {
+      $formatted[] = [
+        'id'               => (int)$r['rawg_id'],
+        'rawg_id'          => (int)$r['rawg_id'],
+        'name'             => $r['name'],
+        'released'         => $r['released'],
+        'rating'           => isset($r['rating']) ? (float)$r['rating'] : null,
+        'user_rating'      => isset($r['user_rating']) ? (float)$r['user_rating'] : null,
+        'background_image' => $r['background_image'],
+        'platforms'        => json_decode($r['platforms'] ?? '[]', true) ?: [],
+        'genres'           => json_decode($r['genres'] ?? '[]', true) ?: [],
+      ];
+    }
+
+    return ['success'=>true,'items'=>$formatted,'top_genres'=>$topGenres];
+
+  } catch (Throwable $e) {
+    error_log('[doRecommendations] error: '.$e->getMessage());
+    return ['success'=>false,'message'=>'Server error'];
+  }
+}
 
 /* ===== MQ request router ===== */
 
@@ -1372,6 +1474,12 @@ function requestProcessor(array $request) {
     }
     case 'notifications_delete': {
       return deleteNotifications($request);
+    }
+
+     case 'recommendations': {
+      $sessionId = (string)($request['sessionId'] ?? '');
+      $limit     = (int)($request['limit'] ?? 12);
+      return doRecommendations($sessionId, $limit);
     }
 
     default:
