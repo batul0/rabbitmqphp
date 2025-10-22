@@ -1026,6 +1026,129 @@ function forumPostMessage(string $sessionId, int $forumId, string $message, ?int
   }
 }
 
+/* ===== Reviews ===== */
+
+function reviewCreate(string $sessionId, int $rawgId, string $title, string $body, float $rating): array {
+  $title  = trim($title);
+  $body   = trim($body);
+  if ($rawgId <= 0 || $body === '' || $rating < 0.5 || $rating > 5.0) {
+    return ['success'=>false,'message'=>'Invalid input'];
+  }
+
+  try {
+    $pdo = getPDO();
+    $uid = resolveUserIdFromSession($sessionId);
+    if (!$uid) return ['success'=>false,'message'=>'Invalid/expired session'];
+
+    // ensure minimal game row exists (best-effort)
+    try {
+      $chk = $pdo->prepare('SELECT 1 FROM games WHERE rawg_id = ?');
+      $chk->execute([$rawgId]);
+      if (!$chk->fetchColumn()) {
+        upsertGame($pdo, ['rawg_id'=>$rawgId, 'name'=>'', 'platforms'=>[], 'genres'=>[]]);
+      }
+    } catch (Throwable $e) { /* ignore */ }
+
+    // optional: if unique per user/game, replace existing
+    $ins = $pdo->prepare("
+      INSERT INTO reviews (rawg_id, user_id, title, body, rating)
+      VALUES (?,?,?,?,?)
+      ON DUPLICATE KEY UPDATE
+        title = VALUES(title),
+        body  = VALUES(body),
+        rating= VALUES(rating),
+        created_at = CURRENT_TIMESTAMP
+    ");
+    $ins->execute([$rawgId, $uid, ($title!==''?$title:null), $body, $rating]);
+    $reviewId = (int)$pdo->lastInsertId();
+
+    // also upsert into ratings to keep averages in one place
+    $r = $pdo->prepare("
+      INSERT INTO ratings (user_id, rawg_id, value) VALUES (?,?,?)
+      ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = CURRENT_TIMESTAMP
+    ");
+    $r->execute([$uid, $rawgId, $rating]);
+
+    // compute avg across ratings or reviews (use ratings table for consistency)
+    $avg = (float)$pdo->query("SELECT ROUND(AVG(value),1) FROM ratings WHERE rawg_id = ".((int)$rawgId))->fetchColumn();
+
+    // best-effort reflect in games.user_rating
+    try {
+      $upg = $pdo->prepare("UPDATE games SET user_rating = ? WHERE rawg_id = ?");
+      $upg->execute([$avg, $rawgId]);
+    } catch (Throwable $e) { error_log('[reviewCreate] user_rating warn: '.$e->getMessage()); }
+
+    // best-effort refresh cache
+    try {
+      $q = $pdo->prepare("SELECT details_json FROM game_details WHERE rawg_id = ? LIMIT 1");
+      $q->execute([$rawgId]);
+      if ($row = $q->fetch()) {
+        $json = json_decode($row['details_json'], true);
+        if (is_array($json)) {
+          $json['user_rating'] = $avg;
+          $u = $pdo->prepare("UPDATE game_details SET details_json = ?, updated_at = NOW() WHERE rawg_id = ?");
+          $u->execute([json_encode($json, JSON_UNESCAPED_UNICODE), $rawgId]);
+        }
+      }
+    } catch (Throwable $e) { error_log('[reviewCreate] cache warn: '.$e->getMessage()); }
+
+    return ['success'=>true,'review_id'=>$reviewId,'avg'=>$avg];
+
+  } catch (Throwable $e) {
+    error_log('[reviewCreate] error: '.$e->getMessage());
+    return ['success'=>false,'message'=>'Server error'];
+  }
+}
+
+function reviewList(int $rawgId, int $page=1, int $pageSize=6): array {
+  if ($rawgId <= 0) return ['success'=>false,'message'=>'Invalid game'];
+  $page = max(1,$page);
+  $pageSize = max(1,min(50,$pageSize));
+  $offset = ($page-1)*$pageSize;
+
+  try {
+    $pdo = getPDO();
+
+    $cnt = $pdo->prepare('SELECT COUNT(*) FROM reviews WHERE rawg_id = ?');
+    $cnt->execute([$rawgId]);
+    $total = (int)$cnt->fetchColumn();
+
+    $stmt = $pdo->prepare("
+      SELECT r.id, r.title, r.body, r.rating, r.created_at, u.username
+        FROM reviews r
+        JOIN users u ON u.id = r.user_id
+       WHERE r.rawg_id = ?
+       ORDER BY r.created_at DESC
+       LIMIT ? OFFSET ?
+    ");
+    $stmt->bindValue(1, $rawgId, PDO::PARAM_INT);
+    $stmt->bindValue(2, $pageSize, PDO::PARAM_INT);
+    $stmt->bindValue(3, $offset,   PDO::PARAM_INT);
+    $stmt->execute();
+
+    $items = [];
+    foreach ($stmt->fetchAll() as $row) {
+      $items[] = [
+        'id'         => (int)$row['id'],
+        'title'      => $row['title'],
+        'body'       => $row['body'],
+        'rating'     => isset($row['rating']) ? (float)$row['rating'] : null,
+        'created_at' => $row['created_at'],
+        'username'   => $row['username'],
+      ];
+    }
+
+    $avg = (float)$pdo->query("SELECT ROUND(AVG(value),1) FROM ratings WHERE rawg_id = ".((int)$rawgId))->fetchColumn();
+    $totalPages = max(1, (int)ceil($total / $pageSize));
+
+    return ['success'=>true,'items'=>$items,'page'=>$page,'pageSize'=>$pageSize,'total'=>$total,'totalPages'=>$totalPages,'avg'=>$avg];
+
+  } catch (Throwable $e) {
+    error_log('[reviewList] error: '.$e->getMessage());
+    return ['success'=>false,'message'=>'Server error'];
+  }
+}
+
 
 /* ===== MQ request router ===== */
 
