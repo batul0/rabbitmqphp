@@ -997,7 +997,6 @@ function forumPostMessage(string $sessionId, int $forumId, string $message, ?int
 
   try {
     $pdo = getPDO();
-
     $uid = resolveUserIdFromSession($sessionId);
     if (!$uid) return ['success'=>false,'message'=>'Invalid/expired session'];
 
@@ -1013,46 +1012,40 @@ function forumPostMessage(string $sessionId, int $forumId, string $message, ?int
       if (!$pc->fetchColumn()) return ['success'=>false,'message'=>'Parent message not found'];
     }
 
+    // insert exactly once
     $ins = $pdo->prepare('INSERT INTO forum_messages (forum_id, user_id, message, parent_id) VALUES (?,?,?,?)');
     $ins->execute([$forumId, $uid, $message, $parentId]);
+    $newId = (int)$pdo->lastInsertId();
 
-    // bump thread
-    $pdo->prepare('UPDATE forums SET updated_at = NOW() WHERE id = ?')->execute([$forumId]);
-    // after:
-    $ins = $pdo->prepare('INSERT INTO forum_messages (forum_id, user_id, message, parent_id) VALUES (?,?,?,?)');
-    $ins->execute([$forumId, $uid, $message, $parentId]);
-
-    // bump thread
+    // bump thread once
     $pdo->prepare('UPDATE forums SET updated_at = NOW() WHERE id = ?')->execute([$forumId]);
 
-    /* >>> NEW: create a notification for the parent author when replying <<< */
+    // create a notification for the parent author when replying
     if ($parentId) {
-      // who wrote the parent?
       $p = $pdo->prepare('SELECT user_id FROM forum_messages WHERE id = ? AND forum_id = ? LIMIT 1');
       $p->execute([$parentId, $forumId]);
       $parentUserId = (int)($p->fetchColumn() ?: 0);
 
       if ($parentUserId && $parentUserId !== $uid) {
-        // need rawg_id for deep-link; get from forum row
         $fg = $pdo->prepare('SELECT rawg_id FROM forums WHERE id = ? LIMIT 1');
         $fg->execute([$forumId]);
         $rawgIdForNotif = (int)($fg->fetchColumn() ?: 0);
 
         if ($rawgIdForNotif > 0) {
-          $n = $pdo->prepare("
-            INSERT INTO notifications (user_id, rawg_id, notification_type)
-            VALUES (?, ?, 'comment')
-          ");
+          $n = $pdo->prepare("INSERT INTO notifications (user_id, rawg_id, notification_type) VALUES (?, ?, 'comment')");
           $n->execute([$parentUserId, $rawgIdForNotif]);
         }
-  }
-}
-    return ['success'=>true, 'message_id'=>(int)$pdo->lastInsertId()];
+      }
+    }
+
+    return ['success'=>true, 'message_id'=>$newId];
+
   } catch (Throwable $e) {
     error_log('[forumPostMessage] error: '.$e->getMessage());
     return ['success'=>false,'message'=>'Server error'];
   }
 }
+
 
 /* ===== Reviews ===== */
 
