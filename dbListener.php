@@ -1018,7 +1018,35 @@ function forumPostMessage(string $sessionId, int $forumId, string $message, ?int
 
     // bump thread
     $pdo->prepare('UPDATE forums SET updated_at = NOW() WHERE id = ?')->execute([$forumId]);
+    // after:
+    $ins = $pdo->prepare('INSERT INTO forum_messages (forum_id, user_id, message, parent_id) VALUES (?,?,?,?)');
+    $ins->execute([$forumId, $uid, $message, $parentId]);
 
+    // bump thread
+    $pdo->prepare('UPDATE forums SET updated_at = NOW() WHERE id = ?')->execute([$forumId]);
+
+    /* >>> NEW: create a notification for the parent author when replying <<< */
+    if ($parentId) {
+      // who wrote the parent?
+      $p = $pdo->prepare('SELECT user_id FROM forum_messages WHERE id = ? AND forum_id = ? LIMIT 1');
+      $p->execute([$parentId, $forumId]);
+      $parentUserId = (int)($p->fetchColumn() ?: 0);
+
+      if ($parentUserId && $parentUserId !== $uid) {
+        // need rawg_id for deep-link; get from forum row
+        $fg = $pdo->prepare('SELECT rawg_id FROM forums WHERE id = ? LIMIT 1');
+        $fg->execute([$forumId]);
+        $rawgIdForNotif = (int)($fg->fetchColumn() ?: 0);
+
+        if ($rawgIdForNotif > 0) {
+          $n = $pdo->prepare("
+            INSERT INTO notifications (user_id, rawg_id, notification_type)
+            VALUES (?, ?, 'comment')
+          ");
+          $n->execute([$parentUserId, $rawgIdForNotif]);
+        }
+  }
+}
     return ['success'=>true, 'message_id'=>(int)$pdo->lastInsertId()];
   } catch (Throwable $e) {
     error_log('[forumPostMessage] error: '.$e->getMessage());
@@ -1156,7 +1184,6 @@ function getNotifications(array $request): array {
     try {
         $pdo = getPDO();
 
-        // Who am I?
         $stmt = $pdo->prepare("
             SELECT s.user_id
             FROM sessions s
@@ -1168,25 +1195,25 @@ function getNotifications(array $request): array {
         if (!$user) return ['success' => false, 'message' => 'Invalid session'];
         $user_id = (int)$user['user_id'];
 
-        // Fetch notifications; include rawg_id for deep-linking
+        // LEFT JOIN so we still get notifications even if the game row isn't cached yet
         $stmt = $pdo->prepare("
             SELECT n.id,
                    n.rawg_id,
-                   g.name   AS game_name,
+                   g.name AS game_name,
                    n.notification_type,
                    n.created_at
             FROM notifications n
-            JOIN games g ON n.rawg_id = g.rawg_id
+            LEFT JOIN games g ON n.rawg_id = g.rawg_id
             WHERE n.user_id = ?
             ORDER BY n.created_at DESC
         ");
         $stmt->execute([$user_id]);
         $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-        // Friendly message
         foreach ($notifications as &$notif) {
             if ($notif['notification_type'] === 'comment') {
-                $notif['message'] = "You were mentioned in the forum for {$notif['game_name']}";
+                $gameName = $notif['game_name'] ?: ('Game #'.$notif['rawg_id']);
+                $notif['message'] = "You were mentioned in the forum for {$gameName}";
             } else {
                 $t = htmlspecialchars($notif['notification_type'] ?? 'new', ENT_QUOTES, 'UTF-8');
                 $notif['message'] = "You have a {$t} notification";
@@ -1195,9 +1222,9 @@ function getNotifications(array $request): array {
         unset($notif);
 
         return [
-            'success'        => true,
-            'count'          => count($notifications),
-            'notifications'  => $notifications
+            'success' => true,
+            'count'   => count($notifications),
+            'notifications' => $notifications
         ];
 
     } catch (Throwable $e) {
@@ -1205,6 +1232,36 @@ function getNotifications(array $request): array {
         return ['success' => false, 'message' => 'Database error'];
     }
 }
+
+
+function deleteNotifications(array $request): array {
+  $sessionId = $request['sessionId'] ?? '';
+  if ($sessionId === '') return ['success' => false, 'message' => 'Invalid session'];
+
+  try {
+    $pdo = getPDO();
+    $stmt = $pdo->prepare("
+      SELECT s.user_id
+      FROM sessions s
+      WHERE s.session_key = ? AND s.expires_at > NOW()
+      LIMIT 1
+    ");
+    $stmt->execute([$sessionId]);
+    $user = $stmt->fetch();
+    if (!$user) return ['success' => false, 'message' => 'Invalid session'];
+
+    $user_id = (int)$user['user_id'];
+    $del = $pdo->prepare("DELETE FROM notifications WHERE user_id = ?");
+    $del->execute([$user_id]);
+
+    return ['success' => true];
+  } catch (Throwable $e) {
+    error_log('[deleteNotifications] '.$e->getMessage());
+    return ['success' => false, 'message' => 'Database error'];
+  }
+}
+
+
 
 /* ===== MQ request router ===== */
 
