@@ -126,6 +126,88 @@ try {
       -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="black" d="M12 17.27L18.18 21 16.54 13.97 22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>') no-repeat center/contain;
     }
     .stars:hover .star-ico.base { filter: drop-shadow(0 0 4px var(--star-glow)); }
+
+    /* Reviews UI: better contrast on dark */
+      #createReviewCard .card-body,
+      #createReviewCard .form-label {
+        color: #e8e8ff !important;
+      }
+      #createReviewCard .form-control {
+        background: #1b1b29;
+        color: #e8e8ff;
+        border: 1px solid rgba(124,77,255,.35);
+      }
+      #createReviewCard .form-control::placeholder {
+        color: #b7b7d0;
+      }
+      #createReviewCard .form-range::-webkit-slider-thumb {
+        background: #e8e8ff;
+      }
+      #createReviewCard .form-range::-webkit-slider-runnable-track {
+        background: #2a2a3a;
+      }
+
+      /* ===== Forums UI: high contrast on dark ===== */
+
+    /* Create Forum card */
+    #forumCreateView .card-body,
+    #forumCreateView .form-label {
+      color: #e8e8ff !important;
+    }
+    #forumCreateView .form-control {
+      background: #1b1b29;
+      color: #e8e8ff;
+      border: 1px solid rgba(124,77,255,.35);
+      border-radius: 10px;
+    }
+    #forumCreateView .form-control::placeholder {
+      color: #b7b7d0;
+    }
+    /* Little game preview text */
+    #forumCreateView #forumCreateGameName { color: #e8e8ff; }
+    #forumCreateView .small.text-secondary { color: #b7b7d0 !important; }
+
+    /* Thread header + message list cards */
+    #forumThreadHeader .card-body { color: #e8e8ff; }
+    #forumThreadView .list-group-item {
+      background: #15151f !important;
+      color: #e8e8ff !important;
+      border-color: rgba(124,77,255,.25) !important;
+    }
+
+    /* Add-message form (reply box at bottom of thread) */
+    #forumMessageForm .card-body,
+    #forumMessageForm .form-label {
+      color: #e8e8ff !important;
+    }
+    #forumMessageForm .form-control {
+      background: #1b1b29;
+      color: #e8e8ff;
+      border: 1px solid rgba(124,77,255,.35);
+      border-radius: 10px;
+    }
+    #forumMessageForm .form-control::placeholder {
+      color: #b7b7d0;
+    }
+
+    /* Inline reply composer (if you add per-message reply boxes later) */
+    .reply-box .form-control {
+      background: #1b1b29;
+      color: #e8e8ff;
+      border: 1px solid rgba(124,77,255,.35);
+      border-radius: 10px;
+    }
+    .reply-box .form-control::placeholder { color: #b7b7d0; }
+
+    /* Buttons look/hover tweaks on dark */
+    #forumCreateView .btn-light,
+    #forumMessageForm .btn-light,
+    .reply-box .btn.btn-success {
+      border-radius: 10px;
+      font-weight: 600;
+    }
+
+
   </style>
 </head>
 <body>
@@ -670,11 +752,236 @@ try {
                 </div>
                 <div class="text-secondary small mt-1">Click to save • half-stars supported</div>
               </div>
+              
             </div>
           </div>
+          <div class="mt-4 pt-4 border-top border-1 border-opacity-25" id="reviewsRoot">
+  <div class="d-flex gap-2 flex-wrap">
+    <button class="btn btn-primary" type="button" id="btnToggleReviews">
+      Show Reviews
+    </button>
+    <button class="btn btn-outline-light" type="button" id="btnWriteReview">
+      + Write a Review
+    </button>
+  </div>
+
+  <!-- Create Review -->
+  <div class="card mt-3 d-none" id="createReviewCard" style="background:#15151f;border:1px solid rgba(124,77,255,.25)">
+    <div class="card-body">
+      <h6 class="mb-3">Your Review for <span id="revGameName"></span></h6>
+      <div class="row g-3 align-items-center">
+        <div class="col-sm-6">
+          <label class="form-label mb-1">Title (optional)</label>
+          <input type="text" id="revTitle" class="form-control" maxlength="100" placeholder="e.g., Masterpiece with clunky UI">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label mb-1">Rating</label>
+          <div class="d-flex align-items-center gap-2">
+            <input type="range" min="0.5" max="5" step="0.5" id="revRating" class="form-range" style="width:200px">
+            <span id="revRatingNum" class="badge bg-secondary">3.0</span>
+          </div>
+        </div>
+      </div>
+      <label class="form-label mt-2">Review</label>
+      <textarea id="revBody" class="form-control" rows="4" maxlength="2000" placeholder="Share what you liked, disliked, and who might enjoy it."></textarea>
+      <div class="mt-3 d-flex gap-2">
+        <button class="btn btn-success" id="revSubmit">Post Review</button>
+        <button class="btn btn-outline-light" id="revCancel">Cancel</button>
+      </div>
+      <div class="small text-secondary mt-2">Tip: ratings support halves (e.g., 3.5).</div>
+    </div>
+  </div>
+
+  <!-- Reviews List -->
+  <div class="collapse mt-3" id="reviewsCollapse">
+    <div class="card card-body text-dark bg-light">
+      <div class="d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 text-secondary">Recent Reviews</h6>
+        <div id="reviewsMeta" class="small text-muted"></div>
+      </div>
+      <div id="reviewsList" class="mt-2"></div>
+      <div class="text-center mt-3">
+        <button class="btn btn-outline-dark btn-sm d-none" id="reviewsLoadMore">Load more</button>
+      </div>
+    </div>
+  </div>
+</div>
+
         `;
 
         // === Action buttons ===
+        /* ===== Reviews: show/hide, list, create ===== */
+(function initReviews(){
+  const root = document.getElementById('reviewsRoot');
+  if (!root) return;
+
+  const btnToggle  = document.getElementById('btnToggleReviews');
+  const btnWrite   = document.getElementById('btnWriteReview');
+  const collapseEl = document.getElementById('reviewsCollapse');
+  const listEl     = document.getElementById('reviewsList');
+  const metaEl     = document.getElementById('reviewsMeta');
+  const moreBtn    = document.getElementById('reviewsLoadMore');
+
+  const cardCreate = document.getElementById('createReviewCard');
+  const revGameNm  = document.getElementById('revGameName');
+  const revTitle   = document.getElementById('revTitle');
+  const revBody    = document.getElementById('revBody');
+  const revRating  = document.getElementById('revRating');
+  const revRatingNum = document.getElementById('revRatingNum');
+  const revSubmit  = document.getElementById('revSubmit');
+  const revCancel  = document.getElementById('revCancel');
+
+  // init values
+  revGameNm.textContent = g.name || 'this game';
+  revRating.value = (g.user_rating_for_user!=null) ? Number(g.user_rating_for_user) : 3.0;
+  revRatingNum.textContent = Number(revRating.value).toFixed(1);
+  revRating.addEventListener('input', ()=> revRatingNum.textContent = Number(revRating.value).toFixed(1));
+
+  let page = 1, totalPages = 1, isLoading=false;
+
+  function bootstrapCollapse(el, show){
+    const inst = bootstrap.Collapse.getOrCreateInstance(el, {toggle:false});
+    if (show) inst.show(); else inst.hide();
+  }
+
+  btnToggle.addEventListener('click', async ()=>{
+    const shown = collapseEl.classList.contains('show');
+    bootstrapCollapse(collapseEl, !shown);
+    if (!shown && listEl.dataset.loaded !== '1') {
+      page = 1; await loadReviews(true);
+    }
+    btnToggle.textContent = shown ? 'Show Reviews' : 'Hide Reviews';
+  });
+
+  btnWrite.addEventListener('click', ()=>{
+    cardCreate.classList.toggle('d-none');
+    if (!cardCreate.classList.contains('d-none')) revTitle.focus();
+  });
+  revCancel.addEventListener('click', ()=> cardCreate.classList.add('d-none'));
+
+  async function loadReviews(reset=false){
+    if (isLoading) return; isLoading=true;
+    if (reset) { listEl.innerHTML=''; listEl.dataset.loaded='0'; metaEl.textContent='Loading…'; }
+    moreBtn.classList.add('d-none');
+
+    try{
+      const payload = new URLSearchParams();
+      payload.append('action', 'list');
+      payload.append('rawg_id', String(g.rawg_id));
+      payload.append('page', String(page));
+      payload.append('pageSize', '6');
+
+      const r = await fetch('reviews.php', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: payload.toString() });
+      const raw = await r.text();
+      let j=null; try{ j=JSON.parse(raw) }catch{}
+      if (!r.ok || !j || j.success===false) throw new Error(j?.message || raw || 'list failed');
+
+      const items = j.items || [];
+      totalPages = j.totalPages || 1;
+
+      if (!items.length && page===1) {
+        listEl.innerHTML = `<p class="text-muted mb-0">No reviews yet. Be the first!</p>`;
+        metaEl.textContent = '';
+      } else {
+        const html = items.map(rw => renderReview(rw)).join('');
+        if (page===1) listEl.innerHTML = html; else listEl.insertAdjacentHTML('beforeend', html);
+        metaEl.textContent = (j.total!=null)
+          ? `Showing ${Math.min(page*6, j.total)} of ${j.total} • Avg ${j.avg!=null?Number(j.avg).toFixed(1):'—'}`
+          : `Page ${page}/${totalPages} • Avg ${j.avg!=null?Number(j.avg).toFixed(1):'—'}`;
+      }
+
+      if (page < totalPages) {
+        moreBtn.classList.remove('d-none');
+      }
+      listEl.dataset.loaded = '1';
+
+      // also refresh the “Rating (avg)” row if server returns avg
+      if (j.avg != null) {
+        const rows = document.querySelectorAll('#gdmBody .col-lg-4 .d-flex');
+        rows.forEach(row=>{
+          const label = row.firstChild?.textContent?.trim();
+          if (label === 'Rating (avg)' || label === 'Rating') {
+            row.lastChild.innerHTML = Number(j.avg).toFixed(1);
+          }
+        });
+        // update card badge on grid too
+        const card = document.querySelector(`[data-card-id="${g.rawg_id}"] .card-rating`);
+        if (card) card.innerHTML = `<span class="badge rating-badge ms-2">${Number(j.avg).toFixed(1)}</span>`;
+      }
+    } catch(e){
+      console.error('reviews list failed', e);
+      if (page===1) { listEl.innerHTML = `<p class="text-danger">Failed to load reviews.</p>`; metaEl.textContent=''; }
+    } finally {
+      isLoading=false;
+    }
+  }
+
+  moreBtn.addEventListener('click', async ()=>{
+    if (page < totalPages) { page+=1; await loadReviews(false); }
+  });
+
+  function renderReview(rw){
+    const stars = starBar(Number(rw.rating || 0));
+    const title = rw.title ? `<div class="fw-semibold">${escapeHtml(rw.title)}</div>` : '';
+    const user  = escapeHtml(rw.username || 'User');
+    const when  = escapeHtml(rw.created_at || '');
+    const body  = escapeHtml(rw.body || '');
+    return `
+      <div class="border-bottom py-2">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>${title}<div class="small text-muted">by <strong>${user}</strong> • ${when}</div></div>
+          <div>${stars}</div>
+        </div>
+        <div class="mt-2">${body.replace(/\n/g,'<br>')}</div>
+      </div>`;
+  }
+
+  function starBar(v){
+    const full = Math.floor(v), half = (v-full)>=0.5 ? 1 : 0, empty = 5-full-half;
+    return `${'★'.repeat(full)}${half? '☆' : ''}${'✩'.repeat(empty)}`; // visually simple; you can reuse your SVG if preferred
+  }
+  function escapeHtml(s){ return String(s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  // submit review
+  revSubmit.addEventListener('click', async ()=>{
+    const title = (revTitle.value||'').trim();
+    const body  = (revBody.value||'').trim();
+    const rating= Number(revRating.value||0);
+    if (!body) { alert('Please write a few words.'); return; }
+    if (rating < 0.5 || rating > 5) { alert('Pick a rating 0.5–5.0'); return; }
+
+    revSubmit.disabled = true;
+    try{
+      const payload = new URLSearchParams();
+      payload.append('action','create');
+      payload.append('rawg_id', String(g.rawg_id));
+      payload.append('title', title);
+      payload.append('body', body);
+      payload.append('rating', String(rating));
+
+      const r = await fetch('reviews.php', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: payload.toString() });
+      const raw = await r.text();
+      let j=null; try{ j=JSON.parse(raw) }catch{}
+      if (!r.ok || !j || j.success===false) throw new Error(j?.message || raw || 'create failed');
+
+      // reset form & hide
+      revTitle.value=''; revBody.value=''; cardCreate.classList.add('d-none');
+
+      // refresh list
+      page=1; await loadReviews(true);
+
+      // update local “Your rating” if provided
+      const ratingNum = document.getElementById('ratingNum');
+      if (ratingNum) ratingNum.textContent = rating.toFixed(1);
+
+    } catch(e){
+      console.error('review create failed', e);
+      alert('Failed to post review.');
+    } finally {
+      revSubmit.disabled = false;
+    }
+  });
+})();
         const actionsWrap = document.getElementById('detailActions');
         if (actionsWrap) {
           async function postToggle(url) {
