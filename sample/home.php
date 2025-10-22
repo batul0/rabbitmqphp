@@ -148,6 +148,20 @@ try {
       }
 
       /* ===== Forums UI: high contrast on dark ===== */
+    .notif-badge{
+      min-width: 22px; height: 22px; line-height: 22px;
+      padding: 0 6px; border-radius: 999px;
+      font-size: 12px; font-weight: 800;
+      text-align: center;
+      /* neon-ish red that pops on ark palette */
+      color: #fff; background: linear-gradient(180deg,#ff4d6d,#d6336c);
+      border: 1px solid rgba(255,77,109,.65);
+      box-shadow: 0 0 12px rgba(255,77,109,.5);
+    }
+    .sidebar-nav a.active .notif-badge{
+      /* keep it vivid when active */
+      box-shadow: 0 0 14px rgba(255,77,109,.7);
+    }
 
     /* Create Forum card */
     #forumCreateView .card-body,
@@ -207,7 +221,22 @@ try {
       font-weight: 600;
     }
 
-
+    #notifications-list .card{
+      background: #15151f;
+      border: 1px solid rgba(124,77,255,.25);
+      color: var(--text);
+    }
+    #notifications-list .card .text-secondary{
+      color: #b7b7d0 !important;
+    }
+    #notifications-content .btn.btn-primary{
+      background: linear-gradient(135deg,#2a2a3a,#1b1b29);
+      border: 1px solid rgba(124,77,255,.45);
+    }
+    #notifications-content .btn.btn-primary:hover{
+      border-color: var(--accent);
+      box-shadow: 0 0 0 .2rem rgba(124,77,255,.25);
+    }
   </style>
 </head>
 <body>
@@ -247,7 +276,13 @@ try {
       </li>
       <li><a href="#" data-target="forum-content"><i class="bi bi-chat-dots me-2"></i>Forum</a></li>
       <li><a href="#" data-target="recommendations-content"><i class="bi bi-lightbulb me-2"></i>Recommendations</a></li>
-      <li><a href="#" data-target="notifications-content"><i class="bi bi-bell me-2"></i>Notifications</a></li>
+      <li>
+      <a id="nav-notifications-link" href="#" data-target="notifications-content" class="d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-bell me-2"></i>Notifications</span>
+        <span id="notif-badge" class="notif-badge" style="display:none">0</span>
+      </a>
+</li>
+
     </ul>
   </aside>
 </div>
@@ -323,7 +358,6 @@ try {
   </section>
 
   <!-- Forum -->
-  <!-- Forum -->
 <section id="forum-content" class="content-display">
   <div class="container my-4">
 
@@ -400,85 +434,6 @@ try {
 
   </div>
 </section>
-<!-- Forum -->
-<section id="forum-content" class="content-display">
-  <div class="container my-4">
-
-    <div class="d-flex align-items-center justify-content-between mb-3">
-      <h2 class="mb-0">Forums</h2>
-      <button id="forumNewBtn" class="btn btn-sm btn-light">+ New Forum</button>
-    </div>
-
-    <!-- Status line -->
-    <div id="forumStatus" class="alert d-none">Loading…</div>
-
-    <!-- View: Create Forum -->
-    <div id="forumCreateView" class="card mb-4 d-none" style="background:#12121b;border:1px solid rgba(124,77,255,.25)">
-      <div class="card-body">
-        <h5 class="card-title mb-3">Create a Forum</h5>
-
-        <div id="forumCreateGamePreview" class="d-flex align-items-center mb-3 d-none">
-          <img id="forumCreateGameImg" src="" alt="" style="width:96px;height:54px;object-fit:cover;border-radius:8px;border:1px solid rgba(124,77,255,.25);margin-right:12px;">
-          <div>
-            <div class="small text-secondary">Game</div>
-            <div id="forumCreateGameName" class="fw-semibold"></div>
-          </div>
-        </div>
-
-        <form id="forumCreateForm">
-          <input type="hidden" id="forumGameId" name="rawg_id" value="">
-          <div class="mb-3">
-            <label class="form-label">Forum title</label>
-            <input type="text" id="forumTitle" name="title" class="form-control" placeholder="e.g. Strategies, Builds, Tips">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Forum description</label>
-            <textarea id="forumDesc" name="description" class="form-control" rows="3" placeholder="What’s this forum about?"></textarea>
-          </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-light" type="submit">Create</button>
-            <button class="btn btn-outline-light" type="button" id="forumCancelCreate">Cancel</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- View: Forum List -->
-    <div id="forumListView">
-      <div id="forumList" class="row g-4"></div>
-      <div class="text-center mt-3">
-        <button id="forumLoadMore" class="btn btn-dark d-none">Load more</button>
-      </div>
-    </div>
-
-    <!-- View: Thread -->
-    <div id="forumThreadView" class="d-none">
-      <button id="forumBackToList" class="btn btn-sm btn-outline-light mb-3">&larr; Back to Forums</button>
-      <div id="forumThreadHeader" class="card mb-3" style="background:#12121b;border:1px solid rgba(124,77,255,.25)">
-        <div class="card-body d-flex gap-3">
-          <img id="forumThreadGameImg" src="" alt="" style="width:128px;height:72px;object-fit:cover;border-radius:10px;border:1px solid rgba(124,77,255,.25);">
-          <div>
-            <div class="small text-secondary" id="forumThreadGameTitle"></div>
-            <h5 id="forumThreadTitle" class="mb-1"></h5>
-            <div id="forumThreadDesc" class="text-secondary"></div>
-          </div>
-        </div>
-      </div>
-
-      <div id="forumThreadMessages" class="list-group mb-3" style="border-radius:10px;overflow:hidden;"></div>
-
-      <form id="forumMessageForm" class="card" style="background:#12121b;border:1px solid rgba(124,77,255,.25)">
-        <div class="card-body">
-          <label class="form-label">Add a message</label>
-          <textarea id="forumMessageText" class="form-control mb-2" rows="3" placeholder="Write something helpful..."></textarea>
-          <button type="submit" class="btn btn-light">Post</button>
-        </div>
-      </form>
-    </div>
-
-  </div>
-</section>
-
 
   <!-- Recommendations -->
   <section id="recommendations-content" class="content-display">
@@ -488,13 +443,27 @@ try {
     </div>
   </section>
 
-  <!-- Notifications -->
-  <section id="notifications-content" class="content-display">
-    <div class="container my-4">
-      <h2>Notifications</h2>
-      <p class="lead text-secondary">All your recent activity and alerts.</p>
+    <!-- Notifications -->
+<section id="notifications-content" class="content-display">
+  <div class="container my-4">
+    <h2>Notifications</h2>
+    <p class="lead text-secondary">All your recent activity and alerts.</p>
+
+    <!-- Refresh and Delete All Buttons -->
+    <div class="mb-3">
+      <button id="refresh-notifications" class="btn btn-primary me-2">
+        Refresh Notifications
+      </button>
+      <button id="delete-all-notifications" class="btn btn-danger">
+        Delete All
+      </button>
     </div>
-  </section>
+
+    <div id="notifications-list">
+      <p class="text-muted">Loading notifications...</p>
+    </div>
+  </div>
+</section>
 </main>
 
 <!-- Game Details Modal -->
@@ -519,6 +488,152 @@ try {
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  // === Notifications UI ===
+  const notifBadgeEl = document.getElementById('notif-badge');
+  const notifNavLink = document.getElementById('nav-notifications-link');
+
+  function setNotifBadge(count) {
+    if (!notifBadgeEl) return;
+    if (!count || count <= 0) {
+      notifBadgeEl.style.display = 'none';
+      notifBadgeEl.textContent = '';
+    } else {
+      notifBadgeEl.style.display = 'inline-block';
+      notifBadgeEl.textContent = String(count);
+    }
+  }
+
+  async function loadNotifications() {
+    const listContainer = document.getElementById('notifications-list');
+    try {
+      const res = await fetch('notifications.php', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'list' })
+      });
+      const data = await res.json();
+
+      if (!data.success) {
+        listContainer.innerHTML = `<p class="text-danger">${data.message || 'Failed to load'}</p>`;
+        setNotifBadge(0);
+        return;
+      }
+
+      const items = data.notifications || [];
+      const count = typeof data.count === 'number' ? data.count : items.length;
+      setNotifBadge(count);
+
+      if (items.length === 0) {
+        listContainer.innerHTML = `<p class="text-muted">No new notifications.</p>`;
+        return;
+      }
+
+      // Render cards with "View thread" deep link
+      listContainer.innerHTML = '';
+      items.forEach(n => {
+        const card = document.createElement('div');
+        card.className = 'card mb-3 shadow-sm';
+        card.innerHTML = `
+          <div class="card-body">
+            <p class="mb-1">${n.message}</p>
+            <small class="text-secondary d-block mb-2">${n.created_at}</small>
+          </div>
+        `;
+        listContainer.appendChild(card);
+      });
+
+      // Wire "View thread"
+      listContainer.querySelectorAll('[data-action="view-thread"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const rawgId = parseInt(btn.getAttribute('data-rawg') || '0', 10);
+          if (!rawgId) return;
+          goToForumThread(rawgId);
+        });
+      });
+
+    } catch (err) {
+      console.error(err);
+      setNotifBadge(0);
+      document.getElementById('notifications-list').innerHTML =
+        `<p class="text-danger">Error loading notifications.</p>`;
+    }
+  }
+
+  async function deleteAllNotifications() {
+    try {
+      const res = await fetch('notifications.php', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNotifBadge(0);
+        loadNotifications();
+      } else {
+        alert(`Failed to delete all: ${data.message || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error deleting all notifications.');
+    }
+  }
+
+  // Deep-link helper: open Game Details and expand Comments
+  // - relies on your existing window.openDetails(id)
+  function goToForumThread(rawgId) {
+    if (!window.openDetails) return;
+    window.openDetails(rawgId);
+
+    // Wait for modal body to render, then expand the comments collapse
+    const tryExpand = () => {
+      const collapse = document.getElementById('commentsCollapse');
+      if (!collapse) { requestAnimationFrame(tryExpand); return; }
+      const bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapse, {toggle:false});
+      bsCollapse.show();
+
+      // Scroll comments into view
+      setTimeout(() => {
+        collapse.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
+    };
+    tryExpand();
+  }
+
+  // Init + buttons
+  document.addEventListener('DOMContentLoaded', () => {
+    loadNotifications();
+    document.getElementById('refresh-notifications').addEventListener('click', loadNotifications);
+    document.getElementById('delete-all-notifications').addEventListener('click', deleteAllNotifications);
+
+    // Optional: refresh the badge whenever user navigates to Notifications section
+    const nav = document.getElementById('sidebarNav');
+    nav?.addEventListener('click', (e) => {
+      const a = e.target.closest('a[data-target="notifications-content"]');
+      if (a) setTimeout(loadNotifications, 50);
+    });
+  });
+</script>
+<script>
+  // Every 60s, refresh count silently
+  setInterval(async () => {
+    try {
+      const res = await fetch('notifications.php', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'list' })
+      });
+      const data = await res.json();
+      const count = data?.success ? (data.count ?? (data.notifications?.length || 0)) : 0;
+      setNotifBadge(count);
+    } catch { /* no-op */ }
+  }, 60000);
+</script>
 
 <script>
 /* ===========================
