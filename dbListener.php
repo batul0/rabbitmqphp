@@ -1254,6 +1254,82 @@ function deleteNotifications(array $request): array {
   }
 }
 
+/* ===== Recs helpers ===== */
+
+// Get a set of rawg_id the user already has (liked or wishlisted) so we can exclude
+function getUserExclusions(PDO $pdo, int $userId): array {
+  $q = $pdo->prepare("
+    SELECT rawg_id FROM liked_games WHERE user_id = ?
+    UNION
+    SELECT rawg_id FROM wishlist_games WHERE user_id = ?
+  ");
+  $q->execute([$userId, $userId]);
+  $set = [];
+  foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $rid) $set[(int)$rid] = true;
+  return $set;
+}
+
+/**
+ * Ask DMZ for broad pages (RAWG feed), then locally filter by wanted genres.
+ * Also upsert anything we pull so the UI is enriched from the DB on next loads.
+ *
+ * @param string[] $wantedGenres list of genre names (e.g., ["Action","Indie"])
+ * @return array list of game arrays straight from DMZ (fields like rawg_id, name, rating, background_image, platforms, genres)
+ */
+function dmzFetchByGenres(PDO $pdo, array $wantedGenres, int $targetCount, array $excludeSet): array {
+  $wanted = array_values(array_unique(array_filter(array_map('strval', $wantedGenres))));
+  if (!$wanted) return [];
+
+  $client = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
+
+  $PAGE_SIZE = 40;   // RAWG page size via DMZ
+  $MAX_PAGES = 4;    // keep the DMZ work modest
+  $ORDERING  = '-rating';
+
+  $collected = [];
+  $seen = [];
+
+  for ($page = 1; $page <= $MAX_PAGES && count($collected) < $targetCount * 2; $page++) {
+    $res = $client->send_request([
+      'type'     => 'fetch_games',
+      'page'     => $page,
+      'pageSize' => $PAGE_SIZE,
+      'query'    => '',        // broad feed
+      'ordering' => $ORDERING
+    ]);
+
+    if (!is_array($res) || empty($res['success'])) break;
+
+    foreach (($res['items'] ?? []) as $g) {
+      $rid = (int)($g['rawg_id'] ?? 0);
+      if (!$rid || isset($excludeSet[$rid]) || isset($seen[$rid])) continue;
+
+      // cache to DB so our UI can enrich from it later
+      try { if (!empty($g['rawg_id'])) upsertGame($pdo, $g); } catch (Throwable $e) { /* best-effort */ }
+
+      // local genre match (names only)
+      $gnames = [];
+      if (!empty($g['genres']) && is_array($g['genres'])) {
+        foreach ($g['genres'] as $gn) {
+          $gnames[] = is_array($gn) ? ($gn['name'] ?? '') : (string)$gn;
+        }
+      }
+      $gnames = array_filter($gnames);
+      $match = count(array_intersect(
+        array_map('mb_strtolower', $wanted),
+        array_map('mb_strtolower', $gnames)
+      )) > 0;
+
+      if ($match) {
+        $seen[$rid] = true;
+        $collected[] = $g;
+        if (count($collected) >= $targetCount * 2) break;
+      }
+    }
+  }
+  return $collected;
+}
+
 function doRecommendations(string $sessionId, int $limit = 12): array {
   $userId = resolveUserIdFromSession($sessionId);
   if (!$userId) return ['success'=>false,'message'=>'Unauthorized'];
@@ -1261,7 +1337,7 @@ function doRecommendations(string $sessionId, int $limit = 12): array {
   try {
     $pdo = getPDO();
 
-    // get genres from liked and wishlisted games
+    // 1) Figure out the user’s top genres from liked + wishlist
     $sql = "
       SELECT g.genres
       FROM games g
@@ -1285,59 +1361,63 @@ function doRecommendations(string $sessionId, int $limit = 12): array {
       }
     }
 
-    if (!$genreCount) return ['success'=>true,'items'=>[]];
+    if (!$genreCount) {
+      // no signals yet → nothing to recommend
+      return ['success'=>true,'items'=>[],'top_genres'=>[]];
+    }
 
     arsort($genreCount);
     $topGenres = array_slice(array_keys($genreCount), 0, 3);
 
-    // try to get recommended games from local db
-    $where = implode(' OR ', array_fill(0, count($topGenres), "JSON_SEARCH(genres, 'one', ?) IS NOT NULL"));
+    // 2) ALWAYS call DMZ first (RAWG through DMZ), then upsert to local DB
+    try {
+      $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
+      // pull generously so DB has fresh stuff to choose from
+      $dmzRes = $dmz->send_request([
+        'type'     => 'fetch_games',
+        'page'     => 1,
+        'pageSize' => max(60, $limit * 3),
+        'query'    => implode(',', $topGenres), // DMZ parses this for RAWG
+        'ordering' => '-rating'
+      ]);
+
+      if (is_array($dmzRes) && !empty($dmzRes['success']) && !empty($dmzRes['items'])) {
+        foreach ($dmzRes['items'] as $g) {
+          if (!empty($g['rawg_id'])) {
+            try { upsertGame($pdo, $g); } catch (Throwable $e) { /* best-effort cache */ }
+          }
+        }
+      } else {
+        error_log('[doRecommendations] DMZ returned empty/failed for genres='.implode(',', $topGenres));
+      }
+    } catch (Throwable $e) {
+      error_log('[doRecommendations] DMZ error: '.$e->getMessage());
+      // keep going; we’ll just use whatever is in DB already
+    }
+
+    // 3) Now query the local DB (excludes liked+wishlist), sorted by user/community rating
+    $placeholders = implode(' OR ', array_fill(0, count($topGenres), "JSON_SEARCH(genres, 'one', ?) IS NOT NULL"));
     $sql = "
       SELECT rawg_id, name, released, rating, user_rating, background_image, platforms, genres
       FROM games
-      WHERE ($where)
+      WHERE ($placeholders)
         AND rawg_id NOT IN (
           SELECT rawg_id FROM liked_games WHERE user_id = ?
           UNION
           SELECT rawg_id FROM wishlist_games WHERE user_id = ?
         )
-      ORDER BY COALESCE(user_rating, rating) DESC
+      ORDER BY COALESCE(user_rating, rating) DESC, released DESC, name ASC
       LIMIT ?
     ";
     $stmt = $pdo->prepare($sql);
     $params = array_merge($topGenres, [$userId, $userId, $limit]);
     $stmt->execute($params);
-    $items = $stmt->fetchAll();
+    $rows = $stmt->fetchAll();
 
-    // if not enough local results, call dmz api
-    if (count($items) < $limit) {
-      try {
-        $dmz = new rabbitMQClient('testRabbitMQ.ini', 'dmzServer');
-        $genreQuery = implode(',', $topGenres);
-        $dmzRes = $dmz->send_request([
-          'type'     => 'fetch_games',
-          'page'     => 1,
-          'pageSize' => $limit [2],
-          'query'    => $genreQuery,
-          'ordering' => '-rating'
-        ]);
-
-        if (is_array($dmzRes) && !empty($dmzRes['success']) && !empty($dmzRes['items'])) {
-          foreach ($dmzRes['items'] as $g) {
-            if (!empty($g['rawg_id'])) upsertGame($pdo, $g);
-          }
-          // rerun local query after updating db
-          $stmt->execute($params);
-          $items = $stmt->fetchAll();
-        }
-      } catch (Throwable $e) {
-        error_log('[doRecommendations] DMZ fallback failed: ' . $e->getMessage());
-      }
-    }
-
-    $formatted = [];
-    foreach ($items as $r) {
-      $formatted[] = [
+    // 4) Format for the frontend
+    $items = [];
+    foreach ($rows as $r) {
+      $items[] = [
         'id'               => (int)$r['rawg_id'],
         'rawg_id'          => (int)$r['rawg_id'],
         'name'             => $r['name'],
@@ -1345,18 +1425,20 @@ function doRecommendations(string $sessionId, int $limit = 12): array {
         'rating'           => isset($r['rating']) ? (float)$r['rating'] : null,
         'user_rating'      => isset($r['user_rating']) ? (float)$r['user_rating'] : null,
         'background_image' => $r['background_image'],
-        'platforms'        => json_decode($r['platforms'] ?? '[]', true) ?: [],
-        'genres'           => json_decode($r['genres'] ?? '[]', true) ?: [],
+        'platforms'        => $r['platforms'] ? (json_decode($r['platforms'], true) ?: []) : [],
+        'genres'           => $r['genres'] ? (json_decode($r['genres'], true) ?: []) : [],
       ];
     }
 
-    return ['success'=>true,'items'=>$formatted,'top_genres'=>$topGenres];
+    return ['success'=>true,'items'=>$items,'top_genres'=>$topGenres];
 
   } catch (Throwable $e) {
     error_log('[doRecommendations] error: '.$e->getMessage());
     return ['success'=>false,'message'=>'Server error'];
   }
 }
+
+
 
 /* ===== MQ request router ===== */
 
